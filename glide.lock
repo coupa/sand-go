@@ -1,0 +1,70 @@
+hash: 1b383542ad69089e3c375364e748b546071b71bbd1daa85d8d16ed26f3700726
+updated: 2016-10-27T11:55:45.015634832-07:00
+imports:
+- name: github.com/golang/protobuf
+  version: 98fa357170587e470c5f27d3c3ea0947b71eb455
+  subpackages:
+  - proto
+- name: github.com/onsi/ginkgo
+  version: a8ccd817611666211fdf6e6a752174a0db8374a8
+  subpackages:
+  - config
+  - internal/codelocation
+  - internal/failer
+  - internal/remote
+  - internal/suite
+  - internal/testingtproxy
+  - internal/writer
+  - reporters
+  - reporters/stenographer
+  - types
+  - internal/containernode
+  - internal/leafnodes
+  - internal/spec
+  - internal/specrunner
+  - reporters/stenographer/support/go-colorable
+  - reporters/stenographer/support/go-isatty
+- name: github.com/onsi/gomega
+  version: 7e2072f716a912a29b2dfa54398faf096a9909e3
+  subpackages:
+  - internal/assertion
+  - internal/asyncassertion
+  - internal/testingtsupport
+  - matchers
+  - types
+  - internal/oraclematcher
+  - format
+  - matchers/support/goraph/bipartitegraph
+  - matchers/support/goraph/edge
+  - matchers/support/goraph/node
+  - matchers/support/goraph/util
+- name: github.com/pmylund/go-cache
+  version: 1881a9bccb818787f68c52bfba648c6cf34c34fa
+- name: github.com/Sirupsen/logrus
+  version: 3ec0642a7fb6488f65b06f9040adc67e3990296a
+- name: golang.org/x/net
+  version: b626cca987fa6333e5dd25baa0fd61708c145011
+  subpackages:
+  - context
+- name: golang.org/x/oauth2
+  version: 25b4fb1468cb89700c7c060cb99f30581a61f5e3
+  subpackages:
+  - clientcredentials
+  - internal
+- name: golang.org/x/sys
+  version: c200b10b5d5e122be351b67af224adc6128af5bf
+  subpackages:
+  - unix
+- name: google.golang.org/appengine
+  version: 46239ca616842c00f41b8cbc6bbf2bd6ffbfcdad
+  subpackages:
+  - urlfetch
+  - internal
+  - internal/urlfetch
+  - internal/base
+  - internal/datastore
+  - internal/log
+  - internal/remote_api
+testImports:
+- name: gopkg.in/yaml.v2
+  version: a5b47d31c556af34a302ce5d659e6fea44d90de0
