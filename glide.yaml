@@ -1,0 +1,10 @@
+package: sand-go
+import:
+- package: golang.org/x/oauth2
+  subpackages:
+  - clientcredentials
+- package: golang.org/x/net/context
+- package: github.com/pmylund/go-cache
+- package: github.com/Sirupsen/logrus
+- package: github.com/onsi/ginkgo
+- package: github.com/onsi/gomega
