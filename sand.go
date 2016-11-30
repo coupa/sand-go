@@ -70,7 +70,8 @@ func NewClient(id, secret, tokenURL string) (client *Client, err error) {
 //Request makes a service API request by first obtaining the access token from
 //SAND. Then it deligates the token to the underlying function to make the service
 //call. If the service returns 401, it performs exponential retry by requesting
-//new tokens from SAND and make the service call.
+//new tokens from SAND and make the service call. If the service returns 502, the
+//service failed to connect to the authentication service and no retry will occur.
 func (c *Client) Request(resourceKey string, exec func(string) (*http.Response, error)) (*http.Response, error) {
 	token, err := c.Token(resourceKey)
 	if err != nil {
@@ -81,12 +82,18 @@ func (c *Client) Request(resourceKey string, exec func(string) (*http.Response, 
 		return resp, err
 	}
 	if c.MaxRetry > 0 {
-		for numRetry := 0; resp.StatusCode == 401 && numRetry < c.MaxRetry; numRetry++ {
+		//Retry only on 401 response from the service.
+		//Get a fresh token from authentication service and retry.
+		for numRetry := 0; resp.StatusCode == http.StatusUnauthorized && numRetry < c.MaxRetry; numRetry++ {
 			sleep := time.Duration(math.Pow(2, float64(numRetry)))
 			time.Sleep(sleep * time.Second)
 			//Prevent reading from cache on retry
 			if c.Cache != nil {
 				c.Cache.Delete(c.cacheKey(resourceKey))
+			}
+			token, err = c.Token(resourceKey)
+			if err != nil {
+				return resp, err
 			}
 			resp, err = exec(token)
 			if err != nil {
@@ -94,19 +101,13 @@ func (c *Client) Request(resourceKey string, exec func(string) (*http.Response, 
 			}
 		}
 	}
-	if resp.StatusCode == 401 {
-		err = errors.New("Failed to access service with token")
-	}
 	return resp, err
 }
 
 //Token returns an OAuth token retrieved from the OAuth2 server. It also puts the
 //token in the cache up to specified amount of time.
 func (c *Client) Token(resourceKey string) (string, error) {
-	if c.Cache != nil {
-		if resourceKey == "" {
-			return "", errors.New("resource key cannot be blank when cache is present")
-		}
+	if c.Cache != nil && resourceKey != "" {
 		token := c.Cache.Read(c.cacheKey(resourceKey))
 		if token != nil {
 			return token.(string), nil
@@ -117,9 +118,9 @@ func (c *Client) Token(resourceKey string) (string, error) {
 		return "", err
 	}
 	if token.AccessToken == "" {
-		return "", errors.New("Received a blank access token")
+		return "", AuthenticationError{"Invalid access token"}
 	}
-	if c.Cache != nil {
+	if c.Cache != nil && resourceKey != "" {
 		expiresIn := 0
 		//If token.Expiry is zero, it means no limit. Otherwise we compute the limit.
 		if !token.Expiry.IsZero() {
@@ -155,6 +156,9 @@ func (c *Client) oauthToken() (token *oauth2.Token, err error) {
 			time.Sleep(sleep * time.Second)
 			token, err = config.Token(ctx)
 		}
+	}
+	if err != nil {
+		err = AuthenticationError{err.Error()}
 	}
 	return token, err
 }

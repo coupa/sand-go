@@ -7,18 +7,12 @@ import (
 	"errors"
 	"io/ioutil"
 	"net/http"
+	"strconv"
 	"time"
-
-	"github.com/Sirupsen/logrus"
 )
 
 const (
 	iso8601 = "2006-01-02T15:04:05.00-07:00"
-)
-
-var (
-	//Logger is used to log detail errors
-	Logger = logrus.New()
 )
 
 //Service can be used to verify a token with SAND
@@ -59,20 +53,39 @@ func NewService(id, secret, tokenURL, resource, verifyURL string) (service *Serv
 }
 
 //CheckRequest checks the bearer token of an incoming HTTP request.
+//If the error is of type sand.ConnectionError, the service should respond with
+//HTTP status code 502. Otherwise the client would perform unnecessary retries.
+//Example with Gin:
+//  func(c *gin.Context) {
+//    good, err := sandService.CheckRequest(c.Request, "action")
+//    if err != nil || !good {
+// 	    c.JSON(sandService.ErrorCode(err), err)    //This would set 502 on ConnectionError
+//    }
+//  }
 func (s *Service) CheckRequest(r *http.Request, action string) (bool, error) {
 	token := ExtractToken(r.Header.Get("Authorization"))
 	rv, err := s.isTokenAllowed(token, action)
 	if err != nil {
 		Logger.Errorf("auth error: %v", err)
-		err = AuthenticationError{"Unauthorized"}
+		err = AuthenticationError{"Service failed to verify the token"}
 	}
 	return rv, err
+}
+
+//ErrorCode gets the HTTP error code based on the error type. By default it is
+//401 unauthorized; if the error is connection error, then it returns 502
+func (s *Service) ErrorCode(err error) int {
+	if err != nil {
+		//Return 502 on error
+		return http.StatusBadGateway
+	}
+	return http.StatusUnauthorized
 }
 
 //isTokenAllowed is the given token allowed to access this service?
 func (s *Service) isTokenAllowed(token, action string) (bool, error) {
 	if token == "" {
-		return false, errors.New("Token is empty")
+		return false, nil
 	}
 	if s.Cache != nil {
 		//Read from cache
@@ -83,7 +96,7 @@ func (s *Service) isTokenAllowed(token, action string) (bool, error) {
 		}
 	}
 	resp, err := s.verifyToken(token, action)
-	if err != nil {
+	if err != nil || resp == nil {
 		return false, err
 	}
 	if s.Cache != nil {
@@ -107,7 +120,7 @@ func (s *Service) isTokenAllowed(token, action string) (bool, error) {
 //verifyToken verifies with SAND to see if the token is allowed to access this service.
 func (s *Service) verifyToken(token, action string) (map[string]interface{}, error) {
 	if token == "" {
-		return nil, errors.New("Token is empty")
+		return nil, nil
 	}
 	accessToken, err := s.Token("service-access-token")
 	if err != nil {
@@ -129,6 +142,9 @@ func (s *Service) verifyToken(token, action string) (map[string]interface{}, err
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
+	}
+	if resp.StatusCode != 200 {
+		return nil, AuthenticationError{"Error response from the authentication service: " + strconv.Itoa(resp.StatusCode)}
 	}
 	defer resp.Body.Close()
 	body, _ := ioutil.ReadAll(resp.Body)

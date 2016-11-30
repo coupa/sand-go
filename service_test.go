@@ -45,38 +45,71 @@ var _ = Describe("Service", func() {
 
 		Describe("#CheckRequest", func() {
 			Context("with empty token", func() {
-				It("returns token is empty error", func() {
+				It("returns false with no error", func() {
 					r := http.Request{Header: http.Header{}}
 					r.Header.Set("Authorization", "")
 					t, err := service.CheckRequest(&r, "")
 					Expect(t).To(Equal(false))
-					Expect(err.Error()).To(Equal("Unauthorized"))
+					Expect(err).To(BeNil())
 
 					r.Header.Set("Authorization", "bad bearer token")
 					t, err = service.CheckRequest(&r, "")
 					Expect(t).To(Equal(false))
-					Expect(err.Error()).To(Equal("Unauthorized"))
+					Expect(err).To(BeNil())
+				})
+			})
+
+			Context("with service unable to retrieve an access token", func() {
+				It("returns an error of type sand.AuthenticationError", func() {
+					service.TokenURL = ""
+					r := http.Request{Header: http.Header{}}
+					r.Header.Set("Authorization", "Bearer abc")
+					t, err := service.CheckRequest(&r, "")
+					Expect(t).To(Equal(false))
+					_, yes := err.(AuthenticationError)
+					Expect(yes).To(BeTrue())
+				})
+			})
+
+			Context("with service unable to verify an access token", func() {
+				It("returns an error of type sand.AuthenticationError", func() {
+					handler = func(w http.ResponseWriter, r *http.Request) {
+						var resp map[string]interface{}
+						if r.RequestURI == "/" {
+							resp = map[string]interface{}{"access_token": "def"}
+						}
+						exp, _ := json.Marshal(resp)
+						fmt.Fprintf(w, string(exp))
+					}
+					service.TokenVerifyURL = ""
+					r := http.Request{Header: http.Header{}}
+					r.Header.Set("Authorization", "Bearer abc")
+					t, err := service.CheckRequest(&r, "")
+					Expect(t).To(Equal(false))
+					_, yes := err.(AuthenticationError)
+					Expect(yes).To(BeTrue())
 				})
 			})
 		})
 
 		Describe("#isTokenAllowed", func() {
 			Context("with empty token", func() {
-				It("returns token is empty error", func() {
+				It("returns false", func() {
 					t, err := service.isTokenAllowed("", "")
 					Expect(t).To(Equal(false))
-					Expect(err.Error()).To(Equal("Token is empty"))
+					Expect(err).To(BeNil())
 				})
 			})
 
 			Context("with an error response", func() {
-				It("returns an error", func() {
+				It("returns a connection error", func() {
 					handler = func(w http.ResponseWriter, r *http.Request) {
 						w.WriteHeader(http.StatusNotFound)
 					}
 					t, err := service.isTokenAllowed("abc", "")
 					Expect(t).To(Equal(false))
-					Expect(err).NotTo(BeNil())
+					_, yes := err.(AuthenticationError)
+					Expect(yes).To(BeTrue())
 				})
 			})
 
@@ -140,10 +173,10 @@ var _ = Describe("Service", func() {
 
 		Describe("#verifyToken", func() {
 			Context("with empty token", func() {
-				It("returns token is empty error", func() {
+				It("returns nil", func() {
 					t, err := service.verifyToken("", "")
 					Expect(t).To(BeNil())
-					Expect(err.Error()).To(Equal("Token is empty"))
+					Expect(err).To(BeNil())
 				})
 			})
 
@@ -154,12 +187,13 @@ var _ = Describe("Service", func() {
 					}
 					t, err := service.verifyToken("abc", "")
 					Expect(t).To(BeNil())
-					Expect(err).NotTo(BeNil())
+					_, yes := err.(AuthenticationError)
+					Expect(yes).To(BeTrue())
 				})
 			})
 
 			Context("with a valid token and valid response", func() {
-				It("", func() {
+				It("returns allowed is true", func() {
 					handler = func(w http.ResponseWriter, r *http.Request) {
 						var resp map[string]interface{}
 						if r.RequestURI == "/" {
