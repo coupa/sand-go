@@ -69,8 +69,10 @@ var _ = Describe("Sand", func() {
 					Expect(resp.StatusCode).To(Equal(501))
 				})
 			})
+
 			Context("with service responding 401", func() {
 				BeforeEach(func() {
+					//2 retry should sleep two times: 1 + 2 = 3 seconds
 					client.MaxRetry = 2
 				})
 				It("performs the retry", func() {
@@ -87,7 +89,6 @@ var _ = Describe("Sand", func() {
 						fmt.Fprintf(w, string(exp))
 					}
 					t1 := time.Now().Unix()
-					//Retry should sleep two times: 1 + 2 = 3 seconds
 					resp, _ := client.Request("resource", func(token string) (*http.Response, error) {
 						return mockResponse, nil
 					})
@@ -96,11 +97,41 @@ var _ = Describe("Sand", func() {
 					Expect(resp.StatusCode).To(Equal(401))
 				})
 			})
-			Context("with calling function has an error", func() {
+
+			Context("with service responding 502", func() {
 				BeforeEach(func() {
-					client.MaxRetry = 2
+					//3 retries should sleep 3 times: 1 + 2 + 4 = 7 seconds
+					client.MaxRetry = 3
 				})
-				It("returns the error", func() {
+				It("does not perform retry", func() {
+					mockResponse := &http.Response{StatusCode: 502}
+
+					handler = func(w http.ResponseWriter, r *http.Request) {
+						resp := map[string]interface{}{
+							"access_token": "abc",
+							"expires_in":   "3600",
+							"scope":        "",
+							"token_type":   "bearer",
+						}
+						exp, _ := json.Marshal(resp)
+						fmt.Fprintf(w, string(exp))
+					}
+					t1 := time.Now().Unix()
+					resp, _ := client.Request("resource", func(token string) (*http.Response, error) {
+						return mockResponse, nil
+					})
+					t2 := time.Now().Unix()
+					Expect(t2 - t1).To(BeNumerically("<", 7))
+					Expect(resp.StatusCode).To(Equal(502))
+				})
+			})
+
+			Context("with calling function returning an error", func() {
+				BeforeEach(func() {
+					//3 retries would have taken 7 seconds
+					client.MaxRetry = 3
+				})
+				It("returns the error without retry", func() {
 					mockResponse := &http.Response{StatusCode: 200}
 
 					handler = func(w http.ResponseWriter, r *http.Request) {
@@ -113,9 +144,12 @@ var _ = Describe("Sand", func() {
 						exp, _ := json.Marshal(resp)
 						fmt.Fprintf(w, string(exp))
 					}
+					t1 := time.Now().Unix()
 					_, err := client.Request("resource", func(token string) (*http.Response, error) {
 						return mockResponse, errors.New("Test")
 					})
+					t2 := time.Now().Unix()
+					Expect(t2 - t1).To(BeNumerically("<", 7))
 					Expect(err.Error()).To(Equal("Test"))
 				})
 			})
@@ -141,14 +175,14 @@ var _ = Describe("Sand", func() {
 			})
 
 			Context("with an empty response", func() {
-				It("returns an access token empty error", func() {
+				It("returns an invalid access token error", func() {
 					handler = func(w http.ResponseWriter, r *http.Request) {
 						resp := map[string]interface{}{}
 						exp, _ := json.Marshal(resp)
 						fmt.Fprintf(w, string(exp))
 					}
 					token, err := client.Token("resource")
-					Expect(err.Error()).To(Equal("Received a blank access token"))
+					Expect(err).To(Equal(AuthenticationError{"Invalid access token"}))
 					Expect(token).To(Equal(""))
 
 					handler = func(w http.ResponseWriter, r *http.Request) {
@@ -162,7 +196,7 @@ var _ = Describe("Sand", func() {
 						fmt.Fprintf(w, string(exp))
 					}
 					token, err = client.Token("resource")
-					Expect(err.Error()).To(Equal("Received a blank access token"))
+					Expect(err).To(Equal(AuthenticationError{"Invalid access token"}))
 					Expect(token).To(Equal(""))
 				})
 			})
@@ -220,7 +254,8 @@ var _ = Describe("Sand", func() {
 				})
 				It("returns an error", func() {
 					token, err := client.oauthToken()
-					Expect(err).NotTo(BeNil())
+					_, yes := err.(AuthenticationError)
+					Expect(yes).To(BeTrue())
 					Expect(token).To(BeNil())
 				})
 
@@ -231,10 +266,20 @@ var _ = Describe("Sand", func() {
 						//Retry should sleep two times: 1 + 2 = 3 seconds
 						token, err := client.oauthToken()
 						t2 := time.Now().Unix()
-						Expect(err).NotTo(BeNil())
-						Expect(token).To(BeNil())
 						Expect(t2 - t1).To(BeNumerically(">=", 3))
+						_, yes := err.(AuthenticationError)
+						Expect(yes).To(BeTrue())
+						Expect(token).To(BeNil())
 					})
+				})
+			})
+			Context("with connection error", func() {
+				It("returns a sand.AuthenticationError", func() {
+					client.TokenURL = ""
+					token, err := client.oauthToken()
+					Expect(token).To(BeNil())
+					_, yes := err.(AuthenticationError)
+					Expect(yes).To(BeTrue())
 				})
 			})
 		})
