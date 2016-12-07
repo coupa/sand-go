@@ -86,6 +86,7 @@ func (c *Client) Request(resourceKey string, exec func(string) (*http.Response, 
 		//Get a fresh token from authentication service and retry.
 		for numRetry := 0; resp.StatusCode == http.StatusUnauthorized && numRetry < c.MaxRetry; numRetry++ {
 			sleep := time.Duration(math.Pow(2, float64(numRetry)))
+			logger.Warnf("Sand request: retrying after %d sec on %d", sleep, http.StatusUnauthorized)
 			time.Sleep(sleep * time.Second)
 			//Prevent reading from cache on retry
 			if c.Cache != nil {
@@ -153,6 +154,7 @@ func (c *Client) oauthToken() (token *oauth2.Token, err error) {
 		for numRetry := 0; err != nil && numRetry < c.MaxRetry; numRetry++ {
 			//Exponential backoff on the retry
 			sleep := time.Duration(math.Pow(2, float64(numRetry)))
+			logger.Warnf("Sand token: retrying after %d sec because of error: %v", sleep, err)
 			time.Sleep(sleep * time.Second)
 			token, err = config.Token(ctx)
 		}
