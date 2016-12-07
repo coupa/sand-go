@@ -66,7 +66,7 @@ func (s *Service) CheckRequest(r *http.Request, action string) (bool, error) {
 	token := ExtractToken(r.Header.Get("Authorization"))
 	rv, err := s.isTokenAllowed(token, action)
 	if err != nil {
-		Logger.Errorf("auth error: %v", err)
+		logger.Errorf("auth error: %v", err)
 		err = AuthenticationError{"Service failed to verify the token"}
 	}
 	return rv, err

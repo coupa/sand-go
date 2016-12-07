@@ -7,8 +7,8 @@ import (
 )
 
 var (
-	//Logger is used to log detail errors
-	Logger = logrus.New()
+	//logger is used to log detail errors
+	logger = logrus.New()
 )
 
 //ExtractToken extracts a bearer token from the Authorization header.
