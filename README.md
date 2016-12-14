@@ -29,7 +29,12 @@ client := sand.NewClient("ClientID", "ClientSecret", "TokenURL",
     "CacheType": "resources", // This is set internally
   }
 )
-client.Token("some-service", true)
+// The Request function has the retry mechanism to retry on 401 error.
+client.Request("some-service", func(token string) (*http.Response, error) {
+  // Make http request with "Bearer {token}" in the Authorization header
+  // return the response and error
+})
+//
 ```
 
 A service that receives a request with the OAuth2 bearer token can use sand.Service to authorize the token with the OAuth2 server. A service can be created via the `NewService` function:
@@ -46,13 +51,22 @@ service := sand.NewService("ClientID", "ClientSecret", "TokenURL", "Resource", "
     DefaultExpTime: 3600,  # The default expiry time for cache for invalid tokens and also valid tokens without expiry times.
   }
 )
-service.IsTokenAllowed(token, "any")
+Usage Example with Gin:
+  func(c *gin.Context) {
+    good, err := sandService.CheckRequest(c.Request, "action")
+    if err != nil || !good {
+ 	    c.JSON(sandService.ErrorCode(err), err)
+    }
+    ...
+  }
 ```
 
 ### Client
 
-Both sand.Client and sand.Service have the `token` function that gets an OAuth token from authentication service. If a cache store is available and the token is found in cache, it will return this token and not retrieving the token from the authentication service.
+sand.Client also has the `Request` method which can perform retry when encountering 401 responses from the service. This should be the primary method to use for a client.
+
+Both sand.Client and sand.Service have the `Token` function that gets an OAuth token from authentication service. If a cache store is available and the token is found in cache, it will return this token and not retrieving the token from the authentication service.
 
 ### Service
 
-sand.Service defines the `IsTokenAllowed` function for verifying with the authentication service on whether the client token from the request is allowed to communicate with this service. A client's token and the verification result will also be cached if the cache is available.
+sand.Service defines the `CheckRequest` function for verifying an http.Request with the authentication service on whether the client token in the request is allowed to communicate with this service. A client's token and the verification result will also be cached if the cache is available.

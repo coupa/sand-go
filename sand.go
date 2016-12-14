@@ -72,6 +72,11 @@ func NewClient(id, secret, tokenURL string) (client *Client, err error) {
 //call. If the service returns 401, it performs exponential retry by requesting
 //new tokens from SAND and make the service call. If the service returns 502, the
 //service failed to connect to the authentication service and no retry will occur.
+//Usage Example:
+// client.Request("some-service", func(token string) (*http.Response, error) {
+//   // Make http request with "Bearer {token}" in the Authorization header
+//   // return the response and error
+// })
 func (c *Client) Request(resourceKey string, exec func(string) (*http.Response, error)) (*http.Response, error) {
 	token, err := c.Token(resourceKey)
 	if err != nil {
