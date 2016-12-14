@@ -34,7 +34,6 @@ client.Request("some-service", func(token string) (*http.Response, error) {
   // Make http request with "Bearer {token}" in the Authorization header
   // return the response and error
 })
-//
 ```
 
 A service that receives a request with the OAuth2 bearer token can use sand.Service to authorize the token with the OAuth2 server. A service can be created via the `NewService` function:
@@ -51,19 +50,19 @@ service := sand.NewService("ClientID", "ClientSecret", "TokenURL", "Resource", "
     DefaultExpTime: 3600,  # The default expiry time for cache for invalid tokens and also valid tokens without expiry times.
   }
 )
-Usage Example with Gin:
-  func(c *gin.Context) {
-    good, err := sandService.CheckRequest(c.Request, "action")
-    if err != nil || !good {
- 	    c.JSON(sandService.ErrorCode(err), err)
-    }
-    ...
+//Usage Example with Gin:
+func(c *gin.Context) {
+  good, err := sandService.CheckRequest(c.Request, "action")
+  if err != nil || !good {
+    c.JSON(sandService.ErrorCode(err), err)
   }
+  ...
+}
 ```
 
 ### Client
 
-sand.Client also has the `Request` method which can perform retry when encountering 401 responses from the service. This should be the primary method to use for a client.
+sand.Client has the `Request` method which can perform retry when encountering 401 responses from the service. This should be the primary method to use for a client.
 
 Both sand.Client and sand.Service have the `Token` function that gets an OAuth token from authentication service. If a cache store is available and the token is found in cache, it will return this token and not retrieving the token from the authentication service.
 
