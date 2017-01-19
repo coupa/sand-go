@@ -24,18 +24,17 @@ type Service struct {
 	//The URL of the token verification endpoint, e.g., "https://oauth.example.com/warden/token/allowed"
 	TokenVerifyURL string
 
-	//The OAuth scope that are allowed to access this service.
-	//Default value is empty/no scope
-	TargetScopes []string
-
 	//The default expiry time for cache for invalid tokens and also valid tokens without expiry times
 	//Default value is 3600 (1 hour)
 	//Only services need this because client tokens will always give expiry time
 	DefaultExpTime int
+
+	//The scopes required to access the token verification endpoint
+	Scopes []string
 }
 
 //NewService returns a Service struct.
-func NewService(id, secret, tokenURL, resource, verifyURL string) (service *Service, err error) {
+func NewService(id, secret, tokenURL, resource, verifyURL string, scopes []string) (service *Service, err error) {
 	client, err := NewClient(id, secret, tokenURL)
 	if err != nil || resource == "" || verifyURL == "" {
 		err = errors.New("NewService: missing required argument(s)")
@@ -46,7 +45,7 @@ func NewService(id, secret, tokenURL, resource, verifyURL string) (service *Serv
 		Client:         *client,
 		Resource:       resource,
 		TokenVerifyURL: verifyURL,
-		TargetScopes:   []string{},
+		Scopes:         scopes,
 		DefaultExpTime: 3600,
 	}
 	return
@@ -62,9 +61,9 @@ func NewService(id, secret, tokenURL, resource, verifyURL string) (service *Serv
 // 	    c.JSON(sandService.ErrorCode(err), err)    //This would set 502 on ConnectionError
 //    }
 //  }
-func (s *Service) CheckRequest(r *http.Request, action string) (bool, error) {
+func (s *Service) CheckRequest(r *http.Request, targetScopes []string, action string) (bool, error) {
 	token := ExtractToken(r.Header.Get("Authorization"))
-	rv, err := s.isTokenAllowed(token, action)
+	rv, err := s.isTokenAllowed(token, targetScopes, action)
 	if err != nil {
 		logger.Errorf("auth error: %v", err)
 		err = AuthenticationError{"Service failed to verify the token"}
@@ -83,19 +82,19 @@ func (s *Service) ErrorCode(err error) int {
 }
 
 //isTokenAllowed is the given token allowed to access this service?
-func (s *Service) isTokenAllowed(token, action string) (bool, error) {
+func (s *Service) isTokenAllowed(token string, targetScopes []string, action string) (bool, error) {
 	if token == "" {
 		return false, nil
 	}
 	if s.Cache != nil {
 		//Read from cache
-		result := s.Cache.Read(s.cacheKey(token))
+		result := s.Cache.Read(s.cacheKey(token, targetScopes))
 		allowed, ok := result.(bool)
 		if ok {
 			return allowed, nil
 		}
 	}
-	resp, err := s.verifyToken(token, action)
+	resp, err := s.verifyToken(token, targetScopes, action)
 	if err != nil || resp == nil {
 		return false, err
 	}
@@ -109,20 +108,20 @@ func (s *Service) isTokenAllowed(token, action string) (bool, error) {
 					exp = s.expiryTime(expTime)
 				}
 			}
-			s.Cache.Write(s.cacheKey(token), true, time.Duration(exp)*time.Second)
+			s.Cache.Write(s.cacheKey(token, targetScopes), true, time.Duration(exp)*time.Second)
 		} else {
-			s.Cache.Write(s.cacheKey(token), false, time.Duration(s.DefaultExpTime)*time.Second)
+			s.Cache.Write(s.cacheKey(token, targetScopes), false, time.Duration(s.DefaultExpTime)*time.Second)
 		}
 	}
 	return resp["allowed"] == true, nil
 }
 
 //verifyToken verifies with SAND to see if the token is allowed to access this service.
-func (s *Service) verifyToken(token, action string) (map[string]interface{}, error) {
+func (s *Service) verifyToken(token string, targetScopes []string, action string) (map[string]interface{}, error) {
 	if token == "" {
 		return nil, nil
 	}
-	accessToken, err := s.Token("service-access-token")
+	accessToken, err := s.Token("service-access-token", s.Scopes)
 	if err != nil {
 		return nil, err
 	}
@@ -130,7 +129,7 @@ func (s *Service) verifyToken(token, action string) (map[string]interface{}, err
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: s.SkipTLSVerify},
 	}}
 	data := map[string]interface{}{
-		"scopes":   s.TargetScopes,
+		"scopes":   targetScopes,
 		"token":    token,
 		"resource": s.Resource,
 		"action":   action,

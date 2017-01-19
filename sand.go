@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/coupa/sand-go/cache"
@@ -22,10 +23,6 @@ type Client struct {
 	ClientSecret string
 	//TokenURL: The token endpoint of the OAuth2 server, e.g., "https://oauth.example.com/oauth2/token"
 	TokenURL string
-
-	//Scopes is an array of scopes that is the OAuth scope of this client.
-	//Default value is empty/no scope
-	Scopes []string
 
 	//SkipTLSVerify skips checking the SSL certificate. Should be false for production.
 	//Default is false
@@ -57,7 +54,6 @@ func NewClient(id, secret, tokenURL string) (client *Client, err error) {
 		ClientID:      id,
 		ClientSecret:  secret,
 		TokenURL:      tokenURL,
-		Scopes:        []string{},
 		SkipTLSVerify: false,
 		MaxRetry:      5,
 		Cache:         nil,
@@ -77,8 +73,8 @@ func NewClient(id, secret, tokenURL string) (client *Client, err error) {
 //   // Make http request with "Bearer {token}" in the Authorization header
 //   // return the response and error
 // })
-func (c *Client) Request(resourceKey string, exec func(string) (*http.Response, error)) (*http.Response, error) {
-	token, err := c.Token(resourceKey)
+func (c *Client) Request(cacheKey string, scopes []string, exec func(string) (*http.Response, error)) (*http.Response, error) {
+	token, err := c.Token(cacheKey, scopes)
 	if err != nil {
 		return nil, err
 	}
@@ -95,9 +91,9 @@ func (c *Client) Request(resourceKey string, exec func(string) (*http.Response, 
 			time.Sleep(sleep * time.Second)
 			//Prevent reading from cache on retry
 			if c.Cache != nil {
-				c.Cache.Delete(c.cacheKey(resourceKey))
+				c.Cache.Delete(c.cacheKey(cacheKey, scopes))
 			}
-			token, err = c.Token(resourceKey)
+			token, err = c.Token(cacheKey, scopes)
 			if err != nil {
 				return resp, err
 			}
@@ -112,28 +108,28 @@ func (c *Client) Request(resourceKey string, exec func(string) (*http.Response, 
 
 //Token returns an OAuth token retrieved from the OAuth2 server. It also puts the
 //token in the cache up to specified amount of time.
-func (c *Client) Token(resourceKey string) (string, error) {
-	if c.Cache != nil && resourceKey != "" {
-		token := c.Cache.Read(c.cacheKey(resourceKey))
+func (c *Client) Token(cacheKey string, scopes []string) (string, error) {
+	if c.Cache != nil && cacheKey != "" {
+		token := c.Cache.Read(c.cacheKey(cacheKey, scopes))
 		if token != nil {
 			return token.(string), nil
 		}
 	}
-	token, err := c.oauthToken()
+	token, err := c.oauthToken(scopes)
 	if err != nil {
 		return "", err
 	}
 	if token.AccessToken == "" {
 		return "", AuthenticationError{"Invalid access token"}
 	}
-	if c.Cache != nil && resourceKey != "" {
+	if c.Cache != nil && cacheKey != "" {
 		expiresIn := 0
 		//If token.Expiry is zero, it means no limit. Otherwise we compute the limit.
 		if !token.Expiry.IsZero() {
 			expiresIn = int(token.Expiry.Unix() - time.Now().Unix())
 		}
 		if expiresIn >= 0 {
-			c.Cache.Write(c.cacheKey(resourceKey), token.AccessToken, time.Duration(expiresIn)*time.Second)
+			c.Cache.Write(c.cacheKey(cacheKey, scopes), token.AccessToken, time.Duration(expiresIn)*time.Second)
 		}
 	}
 	return token.AccessToken, nil
@@ -141,7 +137,7 @@ func (c *Client) Token(resourceKey string) (string, error) {
 
 //oauthToken makes the connection to the OAuth server and returns oauth2.Token
 //The returned token could have empty accessToken.
-func (c *Client) oauthToken() (token *oauth2.Token, err error) {
+func (c *Client) oauthToken(scopes []string) (token *oauth2.Token, err error) {
 	client := &http.Client{Transport: &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: c.SkipTLSVerify},
 	}}
@@ -152,7 +148,7 @@ func (c *Client) oauthToken() (token *oauth2.Token, err error) {
 		ClientID:     c.ClientID,
 		ClientSecret: c.ClientSecret,
 		TokenURL:     c.TokenURL,
-		Scopes:       c.Scopes,
+		Scopes:       scopes,
 	}
 	token, err = config.Token(ctx)
 	if err != nil && c.MaxRetry > 0 {
@@ -171,6 +167,10 @@ func (c *Client) oauthToken() (token *oauth2.Token, err error) {
 }
 
 //cacheKey builds the cache key in the format: <CachRoot>/<cacheType>/<key>
-func (c *Client) cacheKey(key string) string {
-	return c.CacheRoot + "/" + c.cacheType + "/" + key
+func (c *Client) cacheKey(key string, scopes []string) string {
+	rv := c.CacheRoot + "/" + c.cacheType + "/" + key
+	if len(scopes) > 0 {
+		rv += "/" + strings.Join(scopes, "_")
+	}
+	return rv
 }

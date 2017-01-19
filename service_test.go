@@ -15,15 +15,15 @@ var _ = Describe("Service", func() {
 	var service *Service
 
 	BeforeEach(func() {
-		service, _ = NewService("i", "s", "u", "r", "/v")
+		service, _ = NewService("i", "s", "u", "r", "/v", []string{"scope"})
 		service.MaxRetry = 0
 	})
 
 	Describe("#NewService", func() {
 		It("gives error when missing required arguments", func() {
-			_, err := NewService("", "s", "u", "r", "/v")
+			_, err := NewService("", "s", "u", "r", "/v", []string{"scope"})
 			Expect(err.Error()).To(Equal("NewService: missing required argument(s)"))
-			_, err = NewService("i", "s", "u", "", "/v")
+			_, err = NewService("i", "s", "u", "", "/v", []string{"scope"})
 			Expect(err.Error()).To(Equal("NewService: missing required argument(s)"))
 		})
 	})
@@ -48,12 +48,12 @@ var _ = Describe("Service", func() {
 				It("returns false with no error", func() {
 					r := http.Request{Header: http.Header{}}
 					r.Header.Set("Authorization", "")
-					t, err := service.CheckRequest(&r, "")
+					t, err := service.CheckRequest(&r, []string{"scope"}, "")
 					Expect(t).To(Equal(false))
 					Expect(err).To(BeNil())
 
 					r.Header.Set("Authorization", "bad bearer token")
-					t, err = service.CheckRequest(&r, "")
+					t, err = service.CheckRequest(&r, []string{"scope"}, "")
 					Expect(t).To(Equal(false))
 					Expect(err).To(BeNil())
 				})
@@ -64,7 +64,7 @@ var _ = Describe("Service", func() {
 					service.TokenURL = ""
 					r := http.Request{Header: http.Header{}}
 					r.Header.Set("Authorization", "Bearer abc")
-					t, err := service.CheckRequest(&r, "")
+					t, err := service.CheckRequest(&r, []string{"scope"}, "")
 					Expect(t).To(Equal(false))
 					_, yes := err.(AuthenticationError)
 					Expect(yes).To(BeTrue())
@@ -84,7 +84,7 @@ var _ = Describe("Service", func() {
 					service.TokenVerifyURL = ""
 					r := http.Request{Header: http.Header{}}
 					r.Header.Set("Authorization", "Bearer abc")
-					t, err := service.CheckRequest(&r, "")
+					t, err := service.CheckRequest(&r, []string{"scope"}, "")
 					Expect(t).To(Equal(false))
 					_, yes := err.(AuthenticationError)
 					Expect(yes).To(BeTrue())
@@ -95,7 +95,7 @@ var _ = Describe("Service", func() {
 		Describe("#isTokenAllowed", func() {
 			Context("with empty token", func() {
 				It("returns false", func() {
-					t, err := service.isTokenAllowed("", "")
+					t, err := service.isTokenAllowed("", []string{"scope"}, "")
 					Expect(t).To(Equal(false))
 					Expect(err).To(BeNil())
 				})
@@ -106,7 +106,7 @@ var _ = Describe("Service", func() {
 					handler = func(w http.ResponseWriter, r *http.Request) {
 						w.WriteHeader(http.StatusNotFound)
 					}
-					t, err := service.isTokenAllowed("abc", "")
+					t, err := service.isTokenAllowed("abc", []string{"scope"}, "")
 					Expect(t).To(Equal(false))
 					_, yes := err.(AuthenticationError)
 					Expect(yes).To(BeTrue())
@@ -126,7 +126,7 @@ var _ = Describe("Service", func() {
 						exp, _ := json.Marshal(resp)
 						fmt.Fprintf(w, string(exp))
 					}
-					t, err := service.isTokenAllowed("abc", "")
+					t, err := service.isTokenAllowed("abc", []string{"scope"}, "")
 					Expect(t).To(Equal(true))
 					Expect(err).To(BeNil())
 				})
@@ -145,7 +145,7 @@ var _ = Describe("Service", func() {
 						exp, _ := json.Marshal(resp)
 						fmt.Fprintf(w, string(exp))
 					}
-					t, err := service.isTokenAllowed("abc", "")
+					t, err := service.isTokenAllowed("abc", []string{"scope"}, "")
 					Expect(t).To(Equal(false))
 					Expect(err).To(BeNil())
 				})
@@ -164,7 +164,7 @@ var _ = Describe("Service", func() {
 						exp, _ := json.Marshal(resp)
 						fmt.Fprintf(w, string(exp))
 					}
-					t, err := service.isTokenAllowed("abc", "")
+					t, err := service.isTokenAllowed("abc", []string{"scope"}, "")
 					Expect(t).To(Equal(false))
 					Expect(err).To(BeNil())
 				})
@@ -174,7 +174,7 @@ var _ = Describe("Service", func() {
 		Describe("#verifyToken", func() {
 			Context("with empty token", func() {
 				It("returns nil", func() {
-					t, err := service.verifyToken("", "")
+					t, err := service.verifyToken("", []string{"scope"}, "")
 					Expect(t).To(BeNil())
 					Expect(err).To(BeNil())
 				})
@@ -185,7 +185,7 @@ var _ = Describe("Service", func() {
 					handler = func(w http.ResponseWriter, r *http.Request) {
 						w.WriteHeader(http.StatusNotFound)
 					}
-					t, err := service.verifyToken("abc", "")
+					t, err := service.verifyToken("abc", []string{"scope"}, "")
 					Expect(t).To(BeNil())
 					_, yes := err.(AuthenticationError)
 					Expect(yes).To(BeTrue())
@@ -205,7 +205,7 @@ var _ = Describe("Service", func() {
 						exp, _ := json.Marshal(resp)
 						fmt.Fprintf(w, string(exp))
 					}
-					t, err := service.verifyToken("abc", "")
+					t, err := service.verifyToken("abc", []string{"scope"}, "")
 					Expect(err).To(BeNil())
 					Expect(t["allowed"]).To(Equal(true))
 				})
@@ -224,7 +224,7 @@ var _ = Describe("Service", func() {
 							fmt.Fprintf(w, "bad")
 						}
 					}
-					t, err := service.verifyToken("abc", "")
+					t, err := service.verifyToken("abc", []string{"scope"}, "")
 					Expect(err).NotTo(BeNil())
 					Expect(t).To(BeNil())
 				})
