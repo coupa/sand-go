@@ -56,14 +56,14 @@ var _ = Describe("Sand", func() {
 						exp, _ := json.Marshal(resp)
 						fmt.Fprintf(w, string(exp))
 					}
-					resp, _ := client.Request("resource", func(token string) (*http.Response, error) {
+					resp, _ := client.Request("resource", []string{"scope"}, func(token string) (*http.Response, error) {
 						return mockResponse, nil
 					})
 					Expect(resp.StatusCode).To(Equal(200))
 
 					mockResponse = &http.Response{StatusCode: 501}
 
-					resp, _ = client.Request("resource", func(token string) (*http.Response, error) {
+					resp, _ = client.Request("resource", []string{"scope"}, func(token string) (*http.Response, error) {
 						return mockResponse, nil
 					})
 					Expect(resp.StatusCode).To(Equal(501))
@@ -89,7 +89,7 @@ var _ = Describe("Sand", func() {
 						fmt.Fprintf(w, string(exp))
 					}
 					t1 := time.Now().Unix()
-					resp, _ := client.Request("resource", func(token string) (*http.Response, error) {
+					resp, _ := client.Request("resource", []string{"scope"}, func(token string) (*http.Response, error) {
 						return mockResponse, nil
 					})
 					t2 := time.Now().Unix()
@@ -117,7 +117,7 @@ var _ = Describe("Sand", func() {
 						fmt.Fprintf(w, string(exp))
 					}
 					t1 := time.Now().Unix()
-					resp, _ := client.Request("resource", func(token string) (*http.Response, error) {
+					resp, _ := client.Request("resource", []string{"scope"}, func(token string) (*http.Response, error) {
 						return mockResponse, nil
 					})
 					t2 := time.Now().Unix()
@@ -145,7 +145,7 @@ var _ = Describe("Sand", func() {
 						fmt.Fprintf(w, string(exp))
 					}
 					t1 := time.Now().Unix()
-					_, err := client.Request("resource", func(token string) (*http.Response, error) {
+					_, err := client.Request("resource", []string{"scope"}, func(token string) (*http.Response, error) {
 						return mockResponse, errors.New("Test")
 					})
 					t2 := time.Now().Unix()
@@ -168,7 +168,7 @@ var _ = Describe("Sand", func() {
 						exp, _ := json.Marshal(resp)
 						fmt.Fprintf(w, string(exp))
 					}
-					token, err := client.Token("resource")
+					token, err := client.Token("resource", []string{"scope"})
 					Expect(err).To(BeNil())
 					Expect(token).To(Equal("abc"))
 				})
@@ -181,7 +181,7 @@ var _ = Describe("Sand", func() {
 						exp, _ := json.Marshal(resp)
 						fmt.Fprintf(w, string(exp))
 					}
-					token, err := client.Token("resource")
+					token, err := client.Token("resource", []string{"scope"})
 					Expect(err).To(Equal(AuthenticationError{"Invalid access token"}))
 					Expect(token).To(Equal(""))
 
@@ -195,7 +195,7 @@ var _ = Describe("Sand", func() {
 						exp, _ := json.Marshal(resp)
 						fmt.Fprintf(w, string(exp))
 					}
-					token, err = client.Token("resource")
+					token, err = client.Token("resource", []string{"scope"})
 					Expect(err).To(Equal(AuthenticationError{"Invalid access token"}))
 					Expect(token).To(Equal(""))
 				})
@@ -215,7 +215,7 @@ var _ = Describe("Sand", func() {
 						exp, _ := json.Marshal(resp)
 						fmt.Fprintf(w, string(exp))
 					}
-					token, err := client.oauthToken()
+					token, err := client.oauthToken([]string{"scope"})
 					Expect(err).To(BeNil())
 					Expect(token.AccessToken).To(Equal("abc"))
 				})
@@ -227,7 +227,7 @@ var _ = Describe("Sand", func() {
 						exp, _ := json.Marshal(resp)
 						fmt.Fprintf(w, string(exp))
 					}
-					token, err := client.oauthToken()
+					token, err := client.oauthToken([]string{"scope"})
 					Expect(err).To(BeNil())
 					Expect(token.AccessToken).To(Equal("abc"))
 				})
@@ -240,7 +240,7 @@ var _ = Describe("Sand", func() {
 						exp, _ := json.Marshal(resp)
 						fmt.Fprintf(w, string(exp))
 					}
-					token, err := client.oauthToken()
+					token, err := client.oauthToken([]string{"scope"})
 					Expect(err).To(BeNil())
 					Expect(token.AccessToken).To(Equal(""))
 				})
@@ -253,7 +253,7 @@ var _ = Describe("Sand", func() {
 					}
 				})
 				It("returns an error", func() {
-					token, err := client.oauthToken()
+					token, err := client.oauthToken([]string{"scope"})
 					_, yes := err.(AuthenticationError)
 					Expect(yes).To(BeTrue())
 					Expect(token).To(BeNil())
@@ -264,7 +264,7 @@ var _ = Describe("Sand", func() {
 						client.MaxRetry = 2
 						t1 := time.Now().Unix()
 						//Retry should sleep two times: 1 + 2 = 3 seconds
-						token, err := client.oauthToken()
+						token, err := client.oauthToken([]string{"scope"})
 						t2 := time.Now().Unix()
 						Expect(t2 - t1).To(BeNumerically(">=", 3))
 						_, yes := err.(AuthenticationError)
@@ -276,7 +276,7 @@ var _ = Describe("Sand", func() {
 			Context("with connection error", func() {
 				It("returns a sand.AuthenticationError", func() {
 					client.TokenURL = ""
-					token, err := client.oauthToken()
+					token, err := client.oauthToken([]string{"scope"})
 					Expect(token).To(BeNil())
 					_, yes := err.(AuthenticationError)
 					Expect(yes).To(BeTrue())
@@ -287,8 +287,12 @@ var _ = Describe("Sand", func() {
 
 	Describe("#cacheKey", func() {
 		It("returns the cache key", func() {
-			Expect(client.cacheKey("hello")).To(Equal(client.CacheRoot + "/" + client.cacheType + "/hello"))
-			Expect(client.cacheKey("")).To(Equal(client.CacheRoot + "/" + client.cacheType + "/"))
+			Expect(client.cacheKey("hello", nil)).To(Equal(client.CacheRoot + "/" + client.cacheType + "/hello"))
+			Expect(client.cacheKey("hello", []string{})).To(Equal(client.CacheRoot + "/" + client.cacheType + "/hello"))
+			Expect(client.cacheKey("", nil)).To(Equal(client.CacheRoot + "/" + client.cacheType + "/"))
+
+			Expect(client.cacheKey("hello", []string{"a", "b"})).To(Equal(client.CacheRoot + "/" + client.cacheType + "/hello/a_b"))
+			Expect(client.cacheKey("", []string{"a"})).To(Equal(client.CacheRoot + "/" + client.cacheType + "//a"))
 		})
 	})
 })

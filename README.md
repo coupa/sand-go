@@ -18,19 +18,16 @@ A client that intends to communicate with a service can use sand.Client to reque
 //ClientID: The client ID of the OAuth2 client credentials
 //ClientSecret: The client secret of the OAuth2 client credentials
 //TokenURL: The token endpoint of the OAuth2 server, e.g., "https://oauth.example.com/oauth2/token"
-client := sand.NewClient("ClientID", "ClientSecret", "TokenURL",
-  //Below also shows the default values for the options
-  map[string]interface{}{
-    "Scopes":        "",      // A string of whitespace separated scopes
-    "SkipTLSVerify": false,   // Skip verifying the TLS certificate
-    "MaxRetry":      5,       // Maximum number of retries on connection error
-    "Cache":         nil,     // A cache that conforms to the sand.Cache interface
-    "CacheRoot":     "sand",  // A string as the root namespace in the cache
-    "CacheType": "resources", // This is set internally
-  }
-)
+client := sand.NewClient("ClientID", "ClientSecret", "TokenURL")
+
+//Below shows the optional fields (with their default values) that can be modified after a client is created
+client.SkipTLSVerify = false   // Skip verifying the TLS certificate
+client.MaxRetry      = 5       // Maximum number of retries on connection error
+client.Cache         = nil     // A cache that conforms to the sand.Cache interface
+client.CacheRoot     = "sand"  // A string as the root namespace in the cache
+
 // The Request function has the retry mechanism to retry on 401 error.
-client.Request("some-service", func(token string) (*http.Response, error) {
+client.Request("cache-key", []string{"scope1", "scope2"}, func(token string) (*http.Response, error) {
   // Make http request with "Bearer {token}" in the Authorization header
   // return the response and error
 })
@@ -42,17 +39,15 @@ A service that receives a request with the OAuth2 bearer token can use sand.Serv
 //The first four arguments are the same as those of sand.NewClient
 //Resource: The resource name that identifies this service and is registered with the OAuth2 server
 //TokenVerifyURL: The URL of the token verification endpoint, e.g., "https://oauth.example.com/warden/token/allowed"
-service := sand.NewService("ClientID", "ClientSecret", "TokenURL", "Resource", "TokenVerifyURL",
-  //Below also shows the default values for the options
-  map[string]interface{}{
-    ... // Same as NewClient's options above
-    TargetScopes:   "",    # A string of whitespace separated scopes. Scopes that this service require its clients to be in.
-    DefaultExpTime: 3600,  # The default expiry time for cache for invalid tokens and also valid tokens without expiry times.
-  }
-)
+service := sand.NewService("ClientID", "ClientSecret", "TokenURL", "Resource", "TokenVerifyURL", []string{"Scopes"})
+
+//Below shows the optional field (with the default value) that can be modified after a service is created
+... // Same fields as client's above
+service.DefaultExpTime = 3600,  # The default expiry time for cache for invalid tokens and also valid tokens which have no expiry times.
+
 //Usage Example with Gin:
 func(c *gin.Context) {
-  good, err := sandService.CheckRequest(c.Request, "action")
+  good, err := sandService.CheckRequest(c.Request, []string{"scope1", "scope2"}, "action")
   if err != nil || !good {
     c.JSON(sandService.ErrorCode(err), err)
   }
