@@ -56,14 +56,21 @@ func NewService(id, secret, tokenURL, resource, verifyURL string, scopes []strin
 //HTTP status code 502. Otherwise the client would perform unnecessary retries.
 //Example with Gin:
 //  func(c *gin.Context) {
-//    good, err := sandService.CheckRequest(c.Request, "action")
+//    good, err := sandService.CheckRequest(c.Request, "action", []string{"s1", "s2"})
 //    if err != nil || !good {
 // 	    c.JSON(sandService.ErrorCode(err), err)    //This would set 502 on ConnectionError
 //    }
 //  }
 func (s *Service) CheckRequest(r *http.Request, targetScopes []string, action string) (bool, error) {
+	return s.CheckRequestWithCustomRetry(r, targetScopes, action, s.MaxRetry)
+}
+
+//CheckRequestWithCustomRetry allows specifying a positive number as number of retries to
+//use instead of the default MaxRetry on a per-request basis.
+//Using a negative number for numRetry is equivalent to the "Request" function
+func (s *Service) CheckRequestWithCustomRetry(r *http.Request, targetScopes []string, action string, numRetry int) (bool, error) {
 	token := ExtractToken(r.Header.Get("Authorization"))
-	rv, err := s.isTokenAllowed(token, targetScopes, action)
+	rv, err := s.isTokenAllowed(token, targetScopes, action, numRetry)
 	if err != nil {
 		logger.Errorf("auth error: %v", err)
 		err = AuthenticationError{"Service failed to verify the token"}
@@ -82,7 +89,7 @@ func (s *Service) ErrorCode(err error) int {
 }
 
 //isTokenAllowed is the given token allowed to access this service?
-func (s *Service) isTokenAllowed(token string, targetScopes []string, action string) (bool, error) {
+func (s *Service) isTokenAllowed(token string, targetScopes []string, action string, numRetry int) (bool, error) {
 	if token == "" {
 		return false, nil
 	}
@@ -94,7 +101,7 @@ func (s *Service) isTokenAllowed(token string, targetScopes []string, action str
 			return allowed, nil
 		}
 	}
-	resp, err := s.verifyToken(token, targetScopes, action)
+	resp, err := s.verifyToken(token, targetScopes, action, numRetry)
 	if err != nil || resp == nil {
 		return false, err
 	}
@@ -117,11 +124,11 @@ func (s *Service) isTokenAllowed(token string, targetScopes []string, action str
 }
 
 //verifyToken verifies with SAND to see if the token is allowed to access this service.
-func (s *Service) verifyToken(token string, targetScopes []string, action string) (map[string]interface{}, error) {
+func (s *Service) verifyToken(token string, targetScopes []string, action string, numRetry int) (map[string]interface{}, error) {
 	if token == "" {
 		return nil, nil
 	}
-	accessToken, err := s.Token("service-access-token", s.Scopes)
+	accessToken, err := s.Token("service-access-token", s.Scopes, numRetry)
 	if err != nil {
 		return nil, err
 	}

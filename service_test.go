@@ -92,10 +92,27 @@ var _ = Describe("Service", func() {
 			})
 		})
 
+		Describe("#CheckRequestWithCustomRetry", func() {
+			Context("with service unable to retrieve an access token", func() {
+				It("performs retry and returns an error of type sand.AuthenticationError", func() {
+					service.TokenURL = ""
+					r := http.Request{Header: http.Header{}}
+					r.Header.Set("Authorization", "Bearer abc")
+					t1 := time.Now().Unix()
+					t, err := service.CheckRequestWithCustomRetry(&r, []string{"scope"}, "", 2)
+					t2 := time.Now().Unix()
+					Expect(t2 - t1).To(BeNumerically(">=", 3))
+					Expect(t).To(Equal(false))
+					_, yes := err.(AuthenticationError)
+					Expect(yes).To(BeTrue())
+				})
+			})
+		})
+
 		Describe("#isTokenAllowed", func() {
 			Context("with empty token", func() {
 				It("returns false", func() {
-					t, err := service.isTokenAllowed("", []string{"scope"}, "")
+					t, err := service.isTokenAllowed("", []string{"scope"}, "", -1)
 					Expect(t).To(Equal(false))
 					Expect(err).To(BeNil())
 				})
@@ -106,7 +123,7 @@ var _ = Describe("Service", func() {
 					handler = func(w http.ResponseWriter, r *http.Request) {
 						w.WriteHeader(http.StatusNotFound)
 					}
-					t, err := service.isTokenAllowed("abc", []string{"scope"}, "")
+					t, err := service.isTokenAllowed("abc", []string{"scope"}, "", -1)
 					Expect(t).To(Equal(false))
 					_, yes := err.(AuthenticationError)
 					Expect(yes).To(BeTrue())
@@ -126,7 +143,7 @@ var _ = Describe("Service", func() {
 						exp, _ := json.Marshal(resp)
 						fmt.Fprintf(w, string(exp))
 					}
-					t, err := service.isTokenAllowed("abc", []string{"scope"}, "")
+					t, err := service.isTokenAllowed("abc", []string{"scope"}, "", -1)
 					Expect(t).To(Equal(true))
 					Expect(err).To(BeNil())
 				})
@@ -145,7 +162,7 @@ var _ = Describe("Service", func() {
 						exp, _ := json.Marshal(resp)
 						fmt.Fprintf(w, string(exp))
 					}
-					t, err := service.isTokenAllowed("abc", []string{"scope"}, "")
+					t, err := service.isTokenAllowed("abc", []string{"scope"}, "", -1)
 					Expect(t).To(Equal(false))
 					Expect(err).To(BeNil())
 				})
@@ -164,7 +181,7 @@ var _ = Describe("Service", func() {
 						exp, _ := json.Marshal(resp)
 						fmt.Fprintf(w, string(exp))
 					}
-					t, err := service.isTokenAllowed("abc", []string{"scope"}, "")
+					t, err := service.isTokenAllowed("abc", []string{"scope"}, "", -1)
 					Expect(t).To(Equal(false))
 					Expect(err).To(BeNil())
 				})
@@ -174,7 +191,7 @@ var _ = Describe("Service", func() {
 		Describe("#verifyToken", func() {
 			Context("with empty token", func() {
 				It("returns nil", func() {
-					t, err := service.verifyToken("", []string{"scope"}, "")
+					t, err := service.verifyToken("", []string{"scope"}, "", -1)
 					Expect(t).To(BeNil())
 					Expect(err).To(BeNil())
 				})
@@ -185,7 +202,7 @@ var _ = Describe("Service", func() {
 					handler = func(w http.ResponseWriter, r *http.Request) {
 						w.WriteHeader(http.StatusNotFound)
 					}
-					t, err := service.verifyToken("abc", []string{"scope"}, "")
+					t, err := service.verifyToken("abc", []string{"scope"}, "", -1)
 					Expect(t).To(BeNil())
 					_, yes := err.(AuthenticationError)
 					Expect(yes).To(BeTrue())
@@ -205,7 +222,7 @@ var _ = Describe("Service", func() {
 						exp, _ := json.Marshal(resp)
 						fmt.Fprintf(w, string(exp))
 					}
-					t, err := service.verifyToken("abc", []string{"scope"}, "")
+					t, err := service.verifyToken("abc", []string{"scope"}, "", -1)
 					Expect(err).To(BeNil())
 					Expect(t["allowed"]).To(Equal(true))
 				})
@@ -224,7 +241,7 @@ var _ = Describe("Service", func() {
 							fmt.Fprintf(w, "bad")
 						}
 					}
-					t, err := service.verifyToken("abc", []string{"scope"}, "")
+					t, err := service.verifyToken("abc", []string{"scope"}, "", -1)
 					Expect(err).NotTo(BeNil())
 					Expect(t).To(BeNil())
 				})
