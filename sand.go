@@ -69,12 +69,23 @@ func NewClient(id, secret, tokenURL string) (client *Client, err error) {
 //new tokens from SAND and make the service call. If the service returns 502, the
 //service failed to connect to the authentication service and no retry will occur.
 //Usage Example:
-// client.Request("some-service", func(token string) (*http.Response, error) {
+// client.Request("some-service", []string{"s1", "s2"}, func(token string) (*http.Response, error) {
 //   // Make http request with "Bearer {token}" in the Authorization header
 //   // return the response and error
 // })
 func (c *Client) Request(cacheKey string, scopes []string, exec func(string) (*http.Response, error)) (*http.Response, error) {
-	token, err := c.Token(cacheKey, scopes)
+	return c.RequestWithCustomRetry(cacheKey, scopes, c.MaxRetry, exec)
+}
+
+//RequestWithCustomRetry allows specifying numRetry as the number of retries to
+//use instead of the default MaxRetry, on a per-request basis.
+//Using a negative number for numRetry is equivalent to the "Request" function which uses MaxRetry.
+//The retry durations are: 1, 2, 4, 8, 16,... seconds
+func (c *Client) RequestWithCustomRetry(cacheKey string, scopes []string, numRetry int, exec func(string) (*http.Response, error)) (*http.Response, error) {
+	if numRetry < 0 {
+		numRetry = c.MaxRetry
+	}
+	token, err := c.Token(cacheKey, scopes, numRetry)
 	if err != nil {
 		return nil, err
 	}
@@ -82,18 +93,20 @@ func (c *Client) Request(cacheKey string, scopes []string, exec func(string) (*h
 	if err != nil {
 		return resp, err
 	}
-	if c.MaxRetry > 0 {
+	if numRetry > 0 {
 		//Retry only on 401 response from the service.
 		//Get a fresh token from authentication service and retry.
-		for numRetry := 0; resp.StatusCode == http.StatusUnauthorized && numRetry < c.MaxRetry; numRetry++ {
-			sleep := time.Duration(math.Pow(2, float64(numRetry)))
+		for retry := 0; resp.StatusCode == http.StatusUnauthorized && retry < numRetry; retry++ {
+			sleep := time.Duration(math.Pow(2, float64(retry)))
 			logger.Warnf("Sand request: retrying after %d sec on %d", sleep, http.StatusUnauthorized)
 			time.Sleep(sleep * time.Second)
 			//Prevent reading from cache on retry
 			if c.Cache != nil {
 				c.Cache.Delete(c.cacheKey(cacheKey, scopes))
 			}
-			token, err = c.Token(cacheKey, scopes)
+			//Set number of retry to 0, since we are already retrying here, don't retry
+			//when getting the token. Otherwise it may lock up for a long time
+			token, err = c.Token(cacheKey, scopes, 0)
 			if err != nil {
 				return resp, err
 			}
@@ -108,14 +121,14 @@ func (c *Client) Request(cacheKey string, scopes []string, exec func(string) (*h
 
 //Token returns an OAuth token retrieved from the OAuth2 server. It also puts the
 //token in the cache up to specified amount of time.
-func (c *Client) Token(cacheKey string, scopes []string) (string, error) {
+func (c *Client) Token(cacheKey string, scopes []string, numRetry int) (string, error) {
 	if c.Cache != nil && cacheKey != "" {
 		token := c.Cache.Read(c.cacheKey(cacheKey, scopes))
 		if token != nil {
 			return token.(string), nil
 		}
 	}
-	token, err := c.oauthToken(scopes)
+	token, err := c.oauthToken(scopes, numRetry)
 	if err != nil {
 		return "", err
 	}
@@ -137,7 +150,10 @@ func (c *Client) Token(cacheKey string, scopes []string) (string, error) {
 
 //oauthToken makes the connection to the OAuth server and returns oauth2.Token
 //The returned token could have empty accessToken.
-func (c *Client) oauthToken(scopes []string) (token *oauth2.Token, err error) {
+func (c *Client) oauthToken(scopes []string, numRetry int) (token *oauth2.Token, err error) {
+	if numRetry < 0 {
+		numRetry = c.MaxRetry
+	}
 	client := &http.Client{Transport: &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: c.SkipTLSVerify},
 	}}
@@ -151,10 +167,10 @@ func (c *Client) oauthToken(scopes []string) (token *oauth2.Token, err error) {
 		Scopes:       scopes,
 	}
 	token, err = config.Token(ctx)
-	if err != nil && c.MaxRetry > 0 {
-		for numRetry := 0; err != nil && numRetry < c.MaxRetry; numRetry++ {
+	if err != nil && numRetry > 0 {
+		for retry := 0; err != nil && retry < numRetry; retry++ {
 			//Exponential backoff on the retry
-			sleep := time.Duration(math.Pow(2, float64(numRetry)))
+			sleep := time.Duration(math.Pow(2, float64(retry)))
 			logger.Warnf("Sand token: retrying after %d sec because of error: %v", sleep, err)
 			time.Sleep(sleep * time.Second)
 			token, err = config.Token(ctx)
