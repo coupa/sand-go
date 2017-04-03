@@ -47,8 +47,8 @@ service.DefaultExpTime = 3600,  # The default expiry time for cache for invalid 
 
 //Usage Example with Gin:
 func(c *gin.Context) {
-  good, err := sandService.CheckRequest(c.Request, []string{"scope1", "scope2"}, "action")
-  if err != nil || !good {
+  response, err := sandService.CheckRequest(c.Request, []string{"scope1", "scope2"}, "action")
+  if err != nil || response["allowed"] != true {
     c.JSON(sandService.ErrorCode(err), err)
   }
   ...
