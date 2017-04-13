@@ -45,16 +45,16 @@ var _ = Describe("Service", func() {
 
 		Describe("#CheckRequest", func() {
 			Context("with empty token", func() {
-				It("returns false with no error", func() {
+				It("returns response with allowed: false with no error", func() {
 					r := http.Request{Header: http.Header{}}
 					r.Header.Set("Authorization", "")
 					t, err := service.CheckRequest(&r, []string{"scope"}, "")
-					Expect(t).To(Equal(false))
+					Expect(t["allowed"]).To(Equal(false))
 					Expect(err).To(BeNil())
 
 					r.Header.Set("Authorization", "bad bearer token")
 					t, err = service.CheckRequest(&r, []string{"scope"}, "")
-					Expect(t).To(Equal(false))
+					Expect(t).To(Equal(notAllowedResponse))
 					Expect(err).To(BeNil())
 				})
 			})
@@ -65,7 +65,7 @@ var _ = Describe("Service", func() {
 					r := http.Request{Header: http.Header{}}
 					r.Header.Set("Authorization", "Bearer abc")
 					t, err := service.CheckRequest(&r, []string{"scope"}, "")
-					Expect(t).To(Equal(false))
+					Expect(t["allowed"]).To(Equal(false))
 					_, yes := err.(AuthenticationError)
 					Expect(yes).To(BeTrue())
 				})
@@ -85,7 +85,7 @@ var _ = Describe("Service", func() {
 					r := http.Request{Header: http.Header{}}
 					r.Header.Set("Authorization", "Bearer abc")
 					t, err := service.CheckRequest(&r, []string{"scope"}, "")
-					Expect(t).To(Equal(false))
+					Expect(t["allowed"]).To(Equal(false))
 					_, yes := err.(AuthenticationError)
 					Expect(yes).To(BeTrue())
 				})
@@ -102,7 +102,7 @@ var _ = Describe("Service", func() {
 					t, err := service.CheckRequestWithCustomRetry(&r, []string{"scope"}, "", 2)
 					t2 := time.Now().Unix()
 					Expect(t2 - t1).To(BeNumerically(">=", 3))
-					Expect(t).To(Equal(false))
+					Expect(t["allowed"]).To(Equal(false))
 					_, yes := err.(AuthenticationError)
 					Expect(yes).To(BeTrue())
 				})
@@ -111,9 +111,9 @@ var _ = Describe("Service", func() {
 
 		Describe("#isTokenAllowed", func() {
 			Context("with empty token", func() {
-				It("returns false", func() {
+				It("returns response with allowed: false", func() {
 					t, err := service.isTokenAllowed("", []string{"scope"}, "", -1)
-					Expect(t).To(Equal(false))
+					Expect(t).To(Equal(notAllowedResponse))
 					Expect(err).To(BeNil())
 				})
 			})
@@ -124,14 +124,14 @@ var _ = Describe("Service", func() {
 						w.WriteHeader(http.StatusNotFound)
 					}
 					t, err := service.isTokenAllowed("abc", []string{"scope"}, "", -1)
-					Expect(t).To(Equal(false))
+					Expect(t["allowed"]).To(Equal(false))
 					_, yes := err.(AuthenticationError)
 					Expect(yes).To(BeTrue())
 				})
 			})
 
 			Context("with allowed response", func() {
-				It("returns true", func() {
+				It("returns response with allowed: true", func() {
 					handler = func(w http.ResponseWriter, r *http.Request) {
 						var resp map[string]interface{}
 						if r.RequestURI == "/" {
@@ -144,13 +144,13 @@ var _ = Describe("Service", func() {
 						fmt.Fprintf(w, string(exp))
 					}
 					t, err := service.isTokenAllowed("abc", []string{"scope"}, "", -1)
-					Expect(t).To(Equal(true))
+					Expect(t).To(Equal(map[string]interface{}{"allowed": true}))
 					Expect(err).To(BeNil())
 				})
 			})
 
 			Context("with not allowed response", func() {
-				It("returns false", func() {
+				It("returns response with allowed: false", func() {
 					handler = func(w http.ResponseWriter, r *http.Request) {
 						var resp map[string]interface{}
 						if r.RequestURI == "/" {
@@ -163,26 +163,7 @@ var _ = Describe("Service", func() {
 						fmt.Fprintf(w, string(exp))
 					}
 					t, err := service.isTokenAllowed("abc", []string{"scope"}, "", -1)
-					Expect(t).To(Equal(false))
-					Expect(err).To(BeNil())
-				})
-			})
-
-			Context("with empty response", func() {
-				It("returns false", func() {
-					handler = func(w http.ResponseWriter, r *http.Request) {
-						var resp map[string]interface{}
-						if r.RequestURI == "/" {
-							resp = map[string]interface{}{"access_token": "def"}
-						} else if r.RequestURI == "/v" {
-							Expect(r.Header.Get("Authorization")).To(Equal("Bearer def"))
-							resp = map[string]interface{}{}
-						}
-						exp, _ := json.Marshal(resp)
-						fmt.Fprintf(w, string(exp))
-					}
-					t, err := service.isTokenAllowed("abc", []string{"scope"}, "", -1)
-					Expect(t).To(Equal(false))
+					Expect(t["allowed"]).To(Equal(false))
 					Expect(err).To(BeNil())
 				})
 			})
@@ -210,7 +191,7 @@ var _ = Describe("Service", func() {
 			})
 
 			Context("with a valid token and valid response", func() {
-				It("returns allowed is true", func() {
+				It("returns allowed response", func() {
 					handler = func(w http.ResponseWriter, r *http.Request) {
 						var resp map[string]interface{}
 						if r.RequestURI == "/" {
@@ -224,7 +205,7 @@ var _ = Describe("Service", func() {
 					}
 					t, err := service.verifyToken("abc", []string{"scope"}, "", -1)
 					Expect(err).To(BeNil())
-					Expect(t["allowed"]).To(Equal(true))
+					Expect(t).To(Equal(map[string]interface{}{"allowed": true}))
 				})
 			})
 

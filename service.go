@@ -15,6 +15,10 @@ const (
 	iso8601 = "2006-01-02T15:04:05.00-07:00"
 )
 
+var notAllowedResponse = map[string]interface{}{
+	"allowed": false,
+}
+
 //Service can be used to verify a token with SAND
 type Service struct {
 	Client
@@ -51,24 +55,24 @@ func NewService(id, secret, tokenURL, resource, verifyURL string, scopes []strin
 	return
 }
 
-//CheckRequest checks the bearer token of an incoming HTTP request.
+//CheckRequest checks the bearer token of an incoming HTTP request and return response with 'allowed' true/false field.
 //If the error is of type sand.ConnectionError, the service should respond with
 //HTTP status code 502. Otherwise the client would perform unnecessary retries.
 //Example with Gin:
 //  func(c *gin.Context) {
-//    good, err := sandService.CheckRequest(c.Request, "action", []string{"s1", "s2"})
-//    if err != nil || !good {
-// 	    c.JSON(sandService.ErrorCode(err), err)    //This would set 502 on ConnectionError
+//    response, err := sandService.CheckRequest(c.Request, []string{"scope1", "scope2"}, "action")
+//    if err != nil || response["allowed"] != true {
+//      c.JSON(sandService.ErrorCode(err), err)    //This would set 502 on ConnectionError
 //    }
 //  }
-func (s *Service) CheckRequest(r *http.Request, targetScopes []string, action string) (bool, error) {
+func (s *Service) CheckRequest(r *http.Request, targetScopes []string, action string) (map[string]interface{}, error) {
 	return s.CheckRequestWithCustomRetry(r, targetScopes, action, s.MaxRetry)
 }
 
 //CheckRequestWithCustomRetry allows specifying a positive number as number of retries to
 //use instead of the default MaxRetry on a per-request basis.
 //Using a negative number for numRetry is equivalent to the "Request" function
-func (s *Service) CheckRequestWithCustomRetry(r *http.Request, targetScopes []string, action string, numRetry int) (bool, error) {
+func (s *Service) CheckRequestWithCustomRetry(r *http.Request, targetScopes []string, action string, numRetry int) (map[string]interface{}, error) {
 	token := ExtractToken(r.Header.Get("Authorization"))
 	rv, err := s.isTokenAllowed(token, targetScopes, action, numRetry)
 	if err != nil {
@@ -89,21 +93,21 @@ func (s *Service) ErrorCode(err error) int {
 }
 
 //isTokenAllowed is the given token allowed to access this service?
-func (s *Service) isTokenAllowed(token string, targetScopes []string, action string, numRetry int) (bool, error) {
+func (s *Service) isTokenAllowed(token string, targetScopes []string, action string, numRetry int) (map[string]interface{}, error) {
 	if token == "" {
-		return false, nil
+		return notAllowedResponse, nil
 	}
 	if s.Cache != nil {
 		//Read from cache
 		result := s.Cache.Read(s.cacheKey(token, targetScopes))
-		allowed, ok := result.(bool)
+		response, ok := result.(map[string]interface{})
 		if ok {
-			return allowed, nil
+			return response, nil
 		}
 	}
 	resp, err := s.verifyToken(token, targetScopes, action, numRetry)
 	if err != nil || resp == nil {
-		return false, err
+		return notAllowedResponse, err
 	}
 	if s.Cache != nil {
 		//Write to cache
@@ -115,12 +119,12 @@ func (s *Service) isTokenAllowed(token string, targetScopes []string, action str
 					exp = s.expiryTime(expTime)
 				}
 			}
-			s.Cache.Write(s.cacheKey(token, targetScopes), true, time.Duration(exp)*time.Second)
+			s.Cache.Write(s.cacheKey(token, targetScopes), resp, time.Duration(exp)*time.Second)
 		} else {
-			s.Cache.Write(s.cacheKey(token, targetScopes), false, time.Duration(s.DefaultExpTime)*time.Second)
+			s.Cache.Write(s.cacheKey(token, targetScopes), notAllowedResponse, time.Duration(s.DefaultExpTime)*time.Second)
 		}
 	}
-	return resp["allowed"] == true, nil
+	return resp, nil
 }
 
 //verifyToken verifies with SAND to see if the token is allowed to access this service.
