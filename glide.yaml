@@ -5,7 +5,7 @@ import:
   subpackages:
   - clientcredentials
 - package: golang.org/x/net/context
-- package: github.com/pmylund/go-cache
+- package: github.com/patrickmn/go-cache
 - package: github.com/sirupsen/logrus
 - package: github.com/onsi/ginkgo
 - package: github.com/onsi/gomega

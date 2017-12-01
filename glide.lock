@@ -1,5 +1,5 @@
-hash: ee352a6783f1b14613468f2e3baba3a1fe774e66cb4459c46ecedc6c03ddca55
-updated: 2017-12-01T08:41:59.875469299-08:00
+hash: 71293262da06457bdabc214b897f91d963775fee6e4a0260543591d813e07fae
+updated: 2017-12-01T10:42:35.183423432-08:00
 imports:
 - name: github.com/golang/protobuf
   version: 2402d76f3d41f928c7902a765dfc872356dd3aad
@@ -35,8 +35,8 @@ imports:
   - matchers/support/goraph/node
   - matchers/support/goraph/util
   - types
-- name: github.com/pmylund/go-cache
-  version: a122e14c4b8ee69022f62f24ba85cb36ce844366
+- name: github.com/patrickmn/go-cache
+  version: a3647f8e31d79543b2d0f0ae2fe5c379d72cedc0
 - name: github.com/sirupsen/logrus
   version: fe6f2b03125e4fcafb21406381010e363a072c80
 - name: golang.org/x/net

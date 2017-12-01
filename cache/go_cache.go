@@ -3,7 +3,7 @@ package cache
 import (
 	"time"
 
-	"github.com/pmylund/go-cache"
+	"github.com/patrickmn/go-cache"
 )
 
 type GoCache struct {
