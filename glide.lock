@@ -1,49 +1,46 @@
-hash: 1b383542ad69089e3c375364e748b546071b71bbd1daa85d8d16ed26f3700726
-updated: 2016-10-27T11:55:45.015634832-07:00
+hash: ee352a6783f1b14613468f2e3baba3a1fe774e66cb4459c46ecedc6c03ddca55
+updated: 2017-12-01T08:41:59.875469299-08:00
 imports:
 - name: github.com/golang/protobuf
-  version: 98fa357170587e470c5f27d3c3ea0947b71eb455
+  version: 2402d76f3d41f928c7902a765dfc872356dd3aad
   subpackages:
   - proto
 - name: github.com/onsi/ginkgo
-  version: a8ccd817611666211fdf6e6a752174a0db8374a8
+  version: 39d2c24f8a92c88f7e7f4d8ec6c80d3cc8f5ac65
   subpackages:
   - config
   - internal/codelocation
+  - internal/containernode
   - internal/failer
+  - internal/leafnodes
   - internal/remote
+  - internal/spec
+  - internal/specrunner
   - internal/suite
   - internal/testingtproxy
   - internal/writer
   - reporters
   - reporters/stenographer
   - types
-  - internal/containernode
-  - internal/leafnodes
-  - internal/spec
-  - internal/specrunner
-  - reporters/stenographer/support/go-colorable
-  - reporters/stenographer/support/go-isatty
 - name: github.com/onsi/gomega
-  version: 7e2072f716a912a29b2dfa54398faf096a9909e3
+  version: a78ae492d53aad5a7a232d0d0462c14c400e3ee7
   subpackages:
+  - format
   - internal/assertion
   - internal/asyncassertion
   - internal/testingtsupport
   - matchers
-  - types
-  - internal/oraclematcher
-  - format
   - matchers/support/goraph/bipartitegraph
   - matchers/support/goraph/edge
   - matchers/support/goraph/node
   - matchers/support/goraph/util
+  - types
 - name: github.com/pmylund/go-cache
-  version: 1881a9bccb818787f68c52bfba648c6cf34c34fa
-- name: github.com/Sirupsen/logrus
-  version: 3ec0642a7fb6488f65b06f9040adc67e3990296a
+  version: a122e14c4b8ee69022f62f24ba85cb36ce844366
+- name: github.com/sirupsen/logrus
+  version: fe6f2b03125e4fcafb21406381010e363a072c80
 - name: golang.org/x/net
-  version: b626cca987fa6333e5dd25baa0fd61708c145011
+  version: e4fa1c5465ad6111f206fc92186b8c83d64adbe1
   subpackages:
   - context
 - name: golang.org/x/oauth2
@@ -51,20 +48,14 @@ imports:
   subpackages:
   - clientcredentials
   - internal
-- name: golang.org/x/sys
-  version: c200b10b5d5e122be351b67af224adc6128af5bf
-  subpackages:
-  - unix
 - name: google.golang.org/appengine
-  version: 46239ca616842c00f41b8cbc6bbf2bd6ffbfcdad
+  version: a2f4131514e563cedfdb6e7d267df9ad48591e93
   subpackages:
-  - urlfetch
   - internal
-  - internal/urlfetch
   - internal/base
   - internal/datastore
   - internal/log
   - internal/remote_api
-testImports:
-- name: gopkg.in/yaml.v2
-  version: a5b47d31c556af34a302ce5d659e6fea44d90de0
+  - internal/urlfetch
+  - urlfetch
+testImports: []
