@@ -406,12 +406,12 @@ var _ = Describe("Sand", func() {
 
 	Describe("#cacheKey", func() {
 		It("returns the cache key", func() {
-			Expect(client.cacheKey("hello", nil)).To(Equal(client.CacheRoot + "/" + client.cacheType + "/hello"))
-			Expect(client.cacheKey("hello", []string{})).To(Equal(client.CacheRoot + "/" + client.cacheType + "/hello"))
-			Expect(client.cacheKey("", nil)).To(Equal(client.CacheRoot + "/" + client.cacheType + "/"))
+			Expect(client.cacheKey("hello", nil, "")).To(Equal(client.CacheRoot + "/" + client.cacheType + "/hello"))
+			Expect(client.cacheKey("hello", []string{}, "")).To(Equal(client.CacheRoot + "/" + client.cacheType + "/hello"))
+			Expect(client.cacheKey("", nil, "")).To(Equal(client.CacheRoot + "/" + client.cacheType + "/"))
 
-			Expect(client.cacheKey("hello", []string{"a", "b"})).To(Equal(client.CacheRoot + "/" + client.cacheType + "/hello/a_b"))
-			Expect(client.cacheKey("", []string{"a"})).To(Equal(client.CacheRoot + "/" + client.cacheType + "//a"))
+			Expect(client.cacheKey("hello", []string{"a", "b"}, "")).To(Equal(client.CacheRoot + "/" + client.cacheType + "/hello/a_b"))
+			Expect(client.cacheKey("", []string{"a"}, "")).To(Equal(client.CacheRoot + "/" + client.cacheType + "//a"))
 		})
 	})
 })
