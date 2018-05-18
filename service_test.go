@@ -11,6 +11,66 @@ import (
 	. "github.com/onsi/gomega"
 )
 
+func ItBehavesLikeIsTokenAllowed(handler *func(http.ResponseWriter, *http.Request), subject func(string, []string, string, int) (map[string]interface{}, error)) {
+	Context("with empty token", func() {
+		It("returns response with allowed: false", func() {
+			t, err := subject("", []string{"scope"}, "", -1)
+			Expect(t).To(Equal(notAllowedResponse))
+			Expect(err).To(BeNil())
+		})
+	})
+
+	Context("with an error response", func() {
+		It("returns a connection error", func() {
+			*handler = func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusNotFound)
+			}
+			t, err := subject("abc", []string{"scope"}, "", -1)
+			Expect(t["allowed"]).To(Equal(false))
+			_, yes := err.(AuthenticationError)
+			Expect(yes).To(BeTrue())
+		})
+	})
+
+	Context("with allowed response", func() {
+		It("returns response with allowed: true", func() {
+			*handler = func(w http.ResponseWriter, r *http.Request) {
+				var resp map[string]interface{}
+				if r.RequestURI == "/" {
+					resp = map[string]interface{}{"access_token": "def"}
+				} else if r.RequestURI == "/v" {
+					Expect(r.Header.Get("Authorization")).To(Equal("Bearer def"))
+					resp = map[string]interface{}{"allowed": true}
+				}
+				exp, _ := json.Marshal(resp)
+				fmt.Fprintf(w, string(exp))
+			}
+			t, err := subject("abc", []string{"scope"}, "", -1)
+			Expect(t).To(Equal(map[string]interface{}{"allowed": true}))
+			Expect(err).To(BeNil())
+		})
+	})
+
+	Context("with not allowed response", func() {
+		It("returns response with allowed: false", func() {
+			*handler = func(w http.ResponseWriter, r *http.Request) {
+				var resp map[string]interface{}
+				if r.RequestURI == "/" {
+					resp = map[string]interface{}{"access_token": "def"}
+				} else if r.RequestURI == "/v" {
+					Expect(r.Header.Get("Authorization")).To(Equal("Bearer def"))
+					resp = map[string]interface{}{"allowed": false}
+				}
+				exp, _ := json.Marshal(resp)
+				fmt.Fprintf(w, string(exp))
+			}
+			t, err := subject("abc", []string{"scope"}, "", -1)
+			Expect(t["allowed"]).To(Equal(false))
+			Expect(err).To(BeNil())
+		})
+	})
+}
+
 var _ = Describe("Service", func() {
 	var service *Service
 
@@ -110,69 +170,30 @@ var _ = Describe("Service", func() {
 		})
 
 		Describe("#isTokenAllowed", func() {
-			Context("with empty token", func() {
-				It("returns response with allowed: false", func() {
-					t, err := service.isTokenAllowed("", []string{"scope"}, "", -1)
-					Expect(t).To(Equal(notAllowedResponse))
-					Expect(err).To(BeNil())
+			ItBehavesLikeIsTokenAllowed(&handler,
+				func(token string, targetScopes []string, action string, numRetry int) (map[string]interface{}, error) {
+					return service.isTokenAllowed(token, targetScopes, action, numRetry)
 				})
-			})
-
-			Context("with an error response", func() {
-				It("returns a connection error", func() {
-					handler = func(w http.ResponseWriter, r *http.Request) {
-						w.WriteHeader(http.StatusNotFound)
-					}
-					t, err := service.isTokenAllowed("abc", []string{"scope"}, "", -1)
-					Expect(t["allowed"]).To(Equal(false))
-					_, yes := err.(AuthenticationError)
-					Expect(yes).To(BeTrue())
-				})
-			})
-
-			Context("with allowed response", func() {
-				It("returns response with allowed: true", func() {
-					handler = func(w http.ResponseWriter, r *http.Request) {
-						var resp map[string]interface{}
-						if r.RequestURI == "/" {
-							resp = map[string]interface{}{"access_token": "def"}
-						} else if r.RequestURI == "/v" {
-							Expect(r.Header.Get("Authorization")).To(Equal("Bearer def"))
-							resp = map[string]interface{}{"allowed": true}
-						}
-						exp, _ := json.Marshal(resp)
-						fmt.Fprintf(w, string(exp))
-					}
-					t, err := service.isTokenAllowed("abc", []string{"scope"}, "", -1)
-					Expect(t).To(Equal(map[string]interface{}{"allowed": true}))
-					Expect(err).To(BeNil())
-				})
-			})
-
-			Context("with not allowed response", func() {
-				It("returns response with allowed: false", func() {
-					handler = func(w http.ResponseWriter, r *http.Request) {
-						var resp map[string]interface{}
-						if r.RequestURI == "/" {
-							resp = map[string]interface{}{"access_token": "def"}
-						} else if r.RequestURI == "/v" {
-							Expect(r.Header.Get("Authorization")).To(Equal("Bearer def"))
-							resp = map[string]interface{}{"allowed": false}
-						}
-						exp, _ := json.Marshal(resp)
-						fmt.Fprintf(w, string(exp))
-					}
-					t, err := service.isTokenAllowed("abc", []string{"scope"}, "", -1)
-					Expect(t["allowed"]).To(Equal(false))
-					Expect(err).To(BeNil())
-				})
-			})
 		})
 
-		Describe("#verifyToken", func() {
+		Describe("#isTokenAllowedForResource", func() {
+			ItBehavesLikeIsTokenAllowed(&handler,
+				func(token string, targetScopes []string, action string, numRetry int) (map[string]interface{}, error) {
+					return service.isTokenAllowedForResource(token, targetScopes, action, "resource", numRetry)
+				})
+		})
+
+		Describe("#isTokenAllowedForResourceContext", func() {
+			ItBehavesLikeIsTokenAllowed(&handler,
+				func(token string, targetScopes []string, action string, numRetry int) (map[string]interface{}, error) {
+					return service.isTokenAllowedForResourceContext(token, targetScopes, action, "resource", nil, numRetry)
+				})
+		})
+
+		Describe("#verifyTokenForResourceContext", func() {
 			Context("with empty token", func() {
 				It("returns nil", func() {
-					t, err := service.verifyToken("", []string{"scope"}, "", -1)
+					t, err := service.verifyTokenForResourceContext("", []string{"scope"}, "", "resource", nil, -1)
 					Expect(t).To(BeNil())
 					Expect(err).To(BeNil())
 				})
@@ -183,7 +204,7 @@ var _ = Describe("Service", func() {
 					handler = func(w http.ResponseWriter, r *http.Request) {
 						w.WriteHeader(http.StatusNotFound)
 					}
-					t, err := service.verifyToken("abc", []string{"scope"}, "", -1)
+					t, err := service.verifyTokenForResourceContext("abc", []string{"scope"}, "", "resource", nil, -1)
 					Expect(t).To(BeNil())
 					_, yes := err.(AuthenticationError)
 					Expect(yes).To(BeTrue())
@@ -203,7 +224,7 @@ var _ = Describe("Service", func() {
 						exp, _ := json.Marshal(resp)
 						fmt.Fprintf(w, string(exp))
 					}
-					t, err := service.verifyToken("abc", []string{"scope"}, "", -1)
+					t, err := service.verifyTokenForResourceContext("abc", []string{"scope"}, "", "resource", nil, -1)
 					Expect(err).To(BeNil())
 					Expect(t).To(Equal(map[string]interface{}{"allowed": true}))
 				})
@@ -222,7 +243,7 @@ var _ = Describe("Service", func() {
 							fmt.Fprintf(w, "bad")
 						}
 					}
-					t, err := service.verifyToken("abc", []string{"scope"}, "", -1)
+					t, err := service.verifyTokenForResourceContext("abc", []string{"scope"}, "", "resource", nil, -1)
 					Expect(err).NotTo(BeNil())
 					Expect(t).To(BeNil())
 				})

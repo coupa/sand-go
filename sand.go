@@ -102,7 +102,7 @@ func (c *Client) RequestWithCustomRetry(cacheKey string, scopes []string, numRet
 			time.Sleep(sleep * time.Second)
 			//Prevent reading from cache on retry
 			if c.Cache != nil {
-				c.Cache.Delete(c.cacheKey(cacheKey, scopes))
+				c.Cache.Delete(c.cacheKey(cacheKey, scopes, ""))
 			}
 			//Set number of retry to 0, since we are already retrying here, don't retry
 			//when getting the token. Otherwise it may lock up for a long time
@@ -122,8 +122,10 @@ func (c *Client) RequestWithCustomRetry(cacheKey string, scopes []string, numRet
 //Token returns an OAuth token retrieved from the OAuth2 server. It also puts the
 //token in the cache up to specified amount of time.
 func (c *Client) Token(cacheKey string, scopes []string, numRetry int) (string, error) {
+	var ckey string
 	if c.Cache != nil && cacheKey != "" {
-		token := c.Cache.Read(c.cacheKey(cacheKey, scopes))
+		ckey = c.cacheKey(cacheKey, scopes, "")
+		token := c.Cache.Read(ckey)
 		if token != nil {
 			return token.(string), nil
 		}
@@ -142,7 +144,7 @@ func (c *Client) Token(cacheKey string, scopes []string, numRetry int) (string, 
 			expiresIn = int(token.Expiry.Unix() - time.Now().Unix())
 		}
 		if expiresIn >= 0 {
-			c.Cache.Write(c.cacheKey(cacheKey, scopes), token.AccessToken, time.Duration(expiresIn)*time.Second)
+			c.Cache.Write(ckey, token.AccessToken, time.Duration(expiresIn)*time.Second)
 		}
 	}
 	return token.AccessToken, nil
@@ -183,10 +185,13 @@ func (c *Client) oauthToken(scopes []string, numRetry int) (token *oauth2.Token,
 }
 
 //cacheKey builds the cache key in the format: <CachRoot>/<cacheType>/<key>
-func (c *Client) cacheKey(key string, scopes []string) string {
+func (c *Client) cacheKey(key string, scopes []string, resource string) string {
 	rv := c.CacheRoot + "/" + c.cacheType + "/" + key
 	if len(scopes) > 0 {
 		rv += "/" + strings.Join(scopes, "_")
+	}
+	if resource != "" {
+		rv += "/" + resource
 	}
 	return rv
 }
