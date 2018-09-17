@@ -23,7 +23,7 @@ var notAllowedResponse = map[string]interface{}{
 type Service struct {
 	Client
 
-	//Resource is the name of this service that is registered with SAND.
+	//The default resource name that this Service will check the token against.
 	Resource string
 
 	//Default context
@@ -37,8 +37,16 @@ type Service struct {
 	//Only services need this because client tokens will always give expiry time
 	DefaultExpTime int
 
-	//The scopes required to access the token verification endpoint
+	//The scopes required for the service to access the token verification endpoint
 	Scopes []string
+}
+
+type VerificationOption struct {
+	TargetScopes []string
+	Resource     string
+	Action       string
+	Context      map[string]interface{}
+	NumRetry     *int
 }
 
 //NewService returns a Service struct.
@@ -78,11 +86,17 @@ func (s *Service) CheckRequest(r *http.Request, targetScopes []string, action st
 //use instead of using DefaultRetryCount on a per-request basis.
 //Using a negative number for numRetry is equivalent to the "Request" function
 func (s *Service) CheckRequestWithCustomRetry(r *http.Request, targetScopes []string, action string, numRetry int) (map[string]interface{}, error) {
+	return s.VerifyRequest(r, VerificationOption{TargetScopes: targetScopes, Action: action, NumRetry: &numRetry})
+}
+
+//VerifyRequest
+//Remember to set a reasonable NumRetry value (>= 0) for the VerificationOption
+func (s *Service) VerifyRequest(r *http.Request, opt VerificationOption) (map[string]interface{}, error) {
 	token := ExtractToken(r.Header.Get("Authorization"))
-	rv, err := s.isTokenAllowed(token, targetScopes, action, numRetry)
+	rv, err := s.VerifyTokenWithCache(token, opt)
 	if err != nil {
 		logger.Errorf("auth error: %v", err)
-		err = AuthenticationError{"Service failed to verify the token"}
+		err = AuthenticationError{"Service failed to verify the token: " + err.Error()}
 	}
 	return rv, err
 }
@@ -97,25 +111,18 @@ func (s *Service) ErrorCode(err error) int {
 	return http.StatusUnauthorized
 }
 
-//isTokenAllowed is the given token allowed to access this service?
-func (s *Service) isTokenAllowed(token string, targetScopes []string, action string, numRetry int) (map[string]interface{}, error) {
-	return s.isTokenAllowedForResourceContext(token, targetScopes, action, s.Resource, s.Context, numRetry)
-}
-
-//isTokenAllowed is the given token allowed to access this service?
-func (s *Service) isTokenAllowedForResource(token string, targetScopes []string, action string, resource string, numRetry int) (map[string]interface{}, error) {
-	return s.isTokenAllowedForResourceContext(token, targetScopes, action, resource, s.Context, numRetry)
-}
-
-//isTokenAllowed is the given token allowed to access this service?
-func (s *Service) isTokenAllowedForResourceContext(token string, targetScopes []string, action string, resource string, context map[string]interface{}, numRetry int) (map[string]interface{}, error) {
-	if token == "" || resource == "" {
+//VerifyTokenWithCache tries to get the result for this token from the cache first.
+//If not found in cache, if will make a token verification request with Sand.
+func (s *Service) VerifyTokenWithCache(token string, opt VerificationOption) (map[string]interface{}, error) {
+	s.buildOption(&opt)
+	if token == "" || opt.Resource == "" {
 		return notAllowedResponse, nil
 	}
+
 	var ckey string
 	if s.Cache != nil {
 		//Calculate cache key for use later
-		ckey = s.cacheKey(token, targetScopes, resource)
+		ckey = s.cacheKey(token, opt.TargetScopes, opt.Resource)
 		//Read from cache
 		result := s.Cache.Read(ckey)
 		response, ok := result.(map[string]interface{})
@@ -123,7 +130,7 @@ func (s *Service) isTokenAllowedForResourceContext(token string, targetScopes []
 			return response, nil
 		}
 	}
-	resp, err := s.verifyTokenForResourceContext(token, targetScopes, action, resource, context, numRetry)
+	resp, err := s.verifyToken(token, opt)
 	if err != nil || resp == nil {
 		return notAllowedResponse, err
 	}
@@ -145,12 +152,31 @@ func (s *Service) isTokenAllowedForResourceContext(token string, targetScopes []
 	return resp, nil
 }
 
+//Set the defaults for values that are not given.
+func (s *Service) buildOption(opt *VerificationOption) {
+	if opt.Resource == "" {
+		opt.Resource = s.Resource
+	}
+	if len(opt.Context) == 0 {
+		opt.Context = s.Context
+	}
+	if len(opt.TargetScopes) == 0 {
+		opt.TargetScopes = []string{}
+	}
+	retry := s.DefaultRetryCount
+	if opt.NumRetry != nil {
+		retry = *opt.NumRetry
+	}
+	retry = s.tokenRequestRetryCount(retry)
+	opt.NumRetry = &retry
+}
+
 //verifyToken verifies with SAND to see if the token is allowed to access this service.
-func (s *Service) verifyTokenForResourceContext(token string, targetScopes []string, action string, resource string, context map[string]interface{}, numRetry int) (map[string]interface{}, error) {
-	if token == "" || resource == "" {
+func (s *Service) verifyToken(token string, opt VerificationOption) (map[string]interface{}, error) {
+	if token == "" || opt.Resource == "" {
 		return nil, nil
 	}
-	accessToken, err := s.Token("service-access-token", s.Scopes, numRetry)
+	accessToken, err := s.Token("service-access-token", s.Scopes, *opt.NumRetry)
 	if err != nil {
 		return nil, err
 	}
@@ -158,11 +184,11 @@ func (s *Service) verifyTokenForResourceContext(token string, targetScopes []str
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: s.SkipTLSVerify},
 	}}
 	data := map[string]interface{}{
-		"scopes":   targetScopes,
+		"scopes":   opt.TargetScopes,
 		"token":    token,
-		"resource": resource,
-		"action":   action,
-		"context":  context,
+		"resource": opt.Resource,
+		"action":   opt.Action,
+		"context":  opt.Context,
 	}
 	dBytes, _ := json.Marshal(data)
 	req, _ := http.NewRequest("POST", s.TokenVerifyURL, bytes.NewBuffer(dBytes))

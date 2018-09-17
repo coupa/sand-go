@@ -12,6 +12,8 @@ When a service receives a request with an OAuth bearer token, it verifies the to
 
 ## Instruction
 
+Warning: A cache must be used for the client or the service to cache tokens and verification results up to a certain time defined by the OAuth2 server.
+
 A client that intends to communicate with a service can use sand.Client to request a token from an OAuth2 server. A client can be created via the `NewClient` function:
 
 ```
@@ -45,7 +47,26 @@ service := sand.NewService("ClientID", "ClientSecret", "TokenURL", "Resource", "
 ... // Same fields as client's above
 service.DefaultExpTime = 3600,  # The default expiry time for cache for invalid tokens and also valid tokens which have no expiry times.
 
-//Usage Example with Gin:
+//Usage Example with Gin 1:
+//In order for a service to verify the token with customized data rather than
+//the defaults, define a VerificationOption and use the "VerifyRequest" function.
+func(c *gin.Context) {
+  numRetry := 3
+  options := sand.VerificationOption{
+    TargetScopes: []string{"target_scope1"},
+    Resource: "a:b:c:resource",
+    Action: "any",
+    Context: map[string]interface{}{},
+    NumRetry: &numRetry,
+  }
+  response, err := sandService.VerifyRequest(c.Request, options)
+  if err != nil || response["allowed"] != true {
+    c.JSON(sandService.ErrorCode(err), err)
+  }
+  ...
+}
+
+//Usage Example with Gin 2:
 func(c *gin.Context) {
   response, err := sandService.CheckRequest(c.Request, []string{"scope1", "scope2"}, "action")
   if err != nil || response["allowed"] != true {
@@ -63,4 +84,4 @@ Both sand.Client and sand.Service have the `Token` function that gets an OAuth t
 
 ### Service
 
-sand.Service defines the `CheckRequest` function for verifying an http.Request with the authentication service on whether the client token in the request is allowed to communicate with this service. A client's token and the verification result will also be cached if the cache is available.
+sand.Service defines the `VerifyRequest` and `CheckRequest` functions for verifying an http.Request with the authentication service on whether the client token in the request is allowed to communicate with this service. A client's token and the verification result will also be cached if the cache is available.
