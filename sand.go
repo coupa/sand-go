@@ -28,11 +28,12 @@ type Client struct {
 	//Default is false
 	SkipTLSVerify bool
 
-	//MaxRetry is the maximum number of retries to perform with exponential backoff
-	//when connecting to the OAuth2 server fails.
+	//DefaultRetryCount is the default number of retries to perform with exponential backoff when
+	//1. Clients receive 401 response from services
+	//2. Clients' or services' connections to the OAuth2 server fails.
 	//Default value is 5
-	MaxRetry int
-	Cache    cache.Cache
+	DefaultRetryCount int
+	Cache             cache.Cache
 
 	//CacheRoot is the root of the cache key for storing tokens in the cache.
 	//The overall cache key will look like: <CacheRoot>/<cacheType>/<some key>
@@ -51,14 +52,14 @@ func NewClient(id, secret, tokenURL string) (client *Client, err error) {
 		return
 	}
 	client = &Client{
-		ClientID:      id,
-		ClientSecret:  secret,
-		TokenURL:      tokenURL,
-		SkipTLSVerify: false,
-		MaxRetry:      5,
-		Cache:         nil,
-		CacheRoot:     "sand",
-		cacheType:     "resources",
+		ClientID:          id,
+		ClientSecret:      secret,
+		TokenURL:          tokenURL,
+		SkipTLSVerify:     false,
+		DefaultRetryCount: 5,
+		Cache:             nil,
+		CacheRoot:         "sand",
+		cacheType:         "resources",
 	}
 	return
 }
@@ -74,17 +75,19 @@ func NewClient(id, secret, tokenURL string) (client *Client, err error) {
 //   // return the response and error
 // })
 func (c *Client) Request(cacheKey string, scopes []string, exec func(string) (*http.Response, error)) (*http.Response, error) {
-	return c.RequestWithCustomRetry(cacheKey, scopes, c.MaxRetry, exec)
+	return c.RequestWithCustomRetry(cacheKey, scopes, c.DefaultRetryCount, exec)
 }
 
 //RequestWithCustomRetry allows specifying numRetry as the number of retries to
-//use instead of the default MaxRetry, on a per-request basis.
-//Using a negative number for numRetry is equivalent to the "Request" function which uses MaxRetry.
+//use instead of the DefaultRetryCount, on a per-request basis. numRetry MUST be
+//at least one so that if a client's token has expired, it can get a new token when
+//retrying, at least once.
+//Using a negative number for numRetry is equivalent to the "Request" function,
+//which uses DefaultRetryCount.
 //The retry durations are: 1, 2, 4, 8, 16,... seconds
 func (c *Client) RequestWithCustomRetry(cacheKey string, scopes []string, numRetry int, exec func(string) (*http.Response, error)) (*http.Response, error) {
-	if numRetry < 0 {
-		numRetry = c.MaxRetry
-	}
+	clientRetry := c.clientRequestRetryCount(numRetry)
+
 	token, err := c.Token(cacheKey, scopes, numRetry)
 	if err != nil {
 		return nil, err
@@ -93,10 +96,10 @@ func (c *Client) RequestWithCustomRetry(cacheKey string, scopes []string, numRet
 	if err != nil {
 		return resp, err
 	}
-	if numRetry > 0 {
+	if clientRetry > 0 {
 		//Retry only on 401 response from the service.
 		//Get a fresh token from authentication service and retry.
-		for retry := 0; resp.StatusCode == http.StatusUnauthorized && retry < numRetry; retry++ {
+		for retry := 0; resp.StatusCode == http.StatusUnauthorized && retry < clientRetry; retry++ {
 			sleep := time.Duration(math.Pow(2, float64(retry)))
 			logger.Warnf("Sand request: retrying after %d sec on %d", sleep, http.StatusUnauthorized)
 			time.Sleep(sleep * time.Second)
@@ -153,9 +156,8 @@ func (c *Client) Token(cacheKey string, scopes []string, numRetry int) (string, 
 //oauthToken makes the connection to the OAuth server and returns oauth2.Token
 //The returned token could have empty accessToken.
 func (c *Client) oauthToken(scopes []string, numRetry int) (token *oauth2.Token, err error) {
-	if numRetry < 0 {
-		numRetry = c.MaxRetry
-	}
+	numRetry = c.tokenRequestRetryCount(numRetry)
+
 	client := &http.Client{Transport: &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: c.SkipTLSVerify},
 	}}
@@ -194,4 +196,28 @@ func (c *Client) cacheKey(key string, scopes []string, resource string) string {
 		rv += "/" + resource
 	}
 	return rv
+}
+
+//For client requests to services, the retry must be at least 1 in case that the
+//token is expired, then a retry would make the client get a new token.
+func (c *Client) clientRequestRetryCount(count int) int {
+	if count >= 1 {
+		return count
+	}
+	if count == 0 || c.DefaultRetryCount < 1 {
+		return 1
+	}
+	return c.DefaultRetryCount
+}
+
+//For requests to get Sand access tokens, we allow 0 retry if the caller doesn't
+//want to retry. Specifying a negative number will make it use the default retry count.
+func (c *Client) tokenRequestRetryCount(count int) int {
+	if count >= 0 {
+		return count
+	}
+	if c.DefaultRetryCount < 0 {
+		return 0
+	}
+	return c.DefaultRetryCount
 }

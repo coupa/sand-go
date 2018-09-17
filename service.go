@@ -71,11 +71,11 @@ func NewService(id, secret, tokenURL, resource, verifyURL string, scopes []strin
 //    }
 //  }
 func (s *Service) CheckRequest(r *http.Request, targetScopes []string, action string) (map[string]interface{}, error) {
-	return s.CheckRequestWithCustomRetry(r, targetScopes, action, s.MaxRetry)
+	return s.CheckRequestWithCustomRetry(r, targetScopes, action, s.DefaultRetryCount)
 }
 
 //CheckRequestWithCustomRetry allows specifying a positive number as number of retries to
-//use instead of the default MaxRetry on a per-request basis.
+//use instead of using DefaultRetryCount on a per-request basis.
 //Using a negative number for numRetry is equivalent to the "Request" function
 func (s *Service) CheckRequestWithCustomRetry(r *http.Request, targetScopes []string, action string, numRetry int) (map[string]interface{}, error) {
 	token := ExtractToken(r.Header.Get("Authorization"))

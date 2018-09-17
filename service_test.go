@@ -76,7 +76,7 @@ var _ = Describe("Service", func() {
 
 	BeforeEach(func() {
 		service, _ = NewService("i", "s", "u", "r", "/v", []string{"scope"})
-		service.MaxRetry = 0
+		service.DefaultRetryCount = 0
 	})
 
 	Describe("#NewService", func() {
