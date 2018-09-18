@@ -11,7 +11,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func ItBehavesLikeIsTokenAllowed(handler *func(http.ResponseWriter, *http.Request), subject func(string, []string, string, int) (map[string]interface{}, error)) {
+func ItBehavesLikeVerifyTokenWithCache(handler *func(http.ResponseWriter, *http.Request), subject func(string, []string, string, int) (map[string]interface{}, error)) {
 	Context("with empty token", func() {
 		It("returns response with allowed: false", func() {
 			t, err := subject("", []string{"scope"}, "", -1)
@@ -169,31 +169,39 @@ var _ = Describe("Service", func() {
 			})
 		})
 
-		Describe("#isTokenAllowed", func() {
-			ItBehavesLikeIsTokenAllowed(&handler,
+		Describe("#VerifyTokenWithCache", func() {
+			ItBehavesLikeVerifyTokenWithCache(&handler,
 				func(token string, targetScopes []string, action string, numRetry int) (map[string]interface{}, error) {
-					return service.isTokenAllowed(token, targetScopes, action, numRetry)
+					return service.VerifyTokenWithCache(token, VerificationOption{TargetScopes: targetScopes, Action: action})
 				})
+
+			Context("with numRetry", func() {
+				ItBehavesLikeVerifyTokenWithCache(&handler,
+					func(token string, targetScopes []string, action string, numRetry int) (map[string]interface{}, error) {
+						return service.VerifyTokenWithCache(token, VerificationOption{TargetScopes: targetScopes, Action: action, NumRetry: &numRetry})
+					})
+			})
+
+			Context("with resource", func() {
+				ItBehavesLikeVerifyTokenWithCache(&handler,
+					func(token string, targetScopes []string, action string, numRetry int) (map[string]interface{}, error) {
+						return service.VerifyTokenWithCache(token, VerificationOption{TargetScopes: targetScopes, Action: action, Resource: "resource", NumRetry: &numRetry})
+					})
+			})
+
+			Context("with context", func() {
+				ItBehavesLikeVerifyTokenWithCache(&handler,
+					func(token string, targetScopes []string, action string, numRetry int) (map[string]interface{}, error) {
+						return service.VerifyTokenWithCache(token, VerificationOption{TargetScopes: targetScopes, Action: action, Resource: "resource", Context: map[string]interface{}{}, NumRetry: &numRetry})
+					})
+			})
 		})
 
-		Describe("#isTokenAllowedForResource", func() {
-			ItBehavesLikeIsTokenAllowed(&handler,
-				func(token string, targetScopes []string, action string, numRetry int) (map[string]interface{}, error) {
-					return service.isTokenAllowedForResource(token, targetScopes, action, "resource", numRetry)
-				})
-		})
-
-		Describe("#isTokenAllowedForResourceContext", func() {
-			ItBehavesLikeIsTokenAllowed(&handler,
-				func(token string, targetScopes []string, action string, numRetry int) (map[string]interface{}, error) {
-					return service.isTokenAllowedForResourceContext(token, targetScopes, action, "resource", nil, numRetry)
-				})
-		})
-
-		Describe("#verifyTokenForResourceContext", func() {
+		Describe("#verifyToken", func() {
+			minus_one := -1
 			Context("with empty token", func() {
 				It("returns nil", func() {
-					t, err := service.verifyTokenForResourceContext("", []string{"scope"}, "", "resource", nil, -1)
+					t, err := service.verifyToken("", VerificationOption{TargetScopes: []string{"scope"}, Action: "", Resource: "resource", Context: nil, NumRetry: &minus_one})
 					Expect(t).To(BeNil())
 					Expect(err).To(BeNil())
 				})
@@ -204,7 +212,7 @@ var _ = Describe("Service", func() {
 					handler = func(w http.ResponseWriter, r *http.Request) {
 						w.WriteHeader(http.StatusNotFound)
 					}
-					t, err := service.verifyTokenForResourceContext("abc", []string{"scope"}, "", "resource", nil, -1)
+					t, err := service.verifyToken("abc", VerificationOption{TargetScopes: []string{"scope"}, Action: "", Resource: "resource", Context: nil, NumRetry: &minus_one})
 					Expect(t).To(BeNil())
 					_, yes := err.(AuthenticationError)
 					Expect(yes).To(BeTrue())
@@ -224,7 +232,7 @@ var _ = Describe("Service", func() {
 						exp, _ := json.Marshal(resp)
 						fmt.Fprintf(w, string(exp))
 					}
-					t, err := service.verifyTokenForResourceContext("abc", []string{"scope"}, "", "resource", nil, -1)
+					t, err := service.verifyToken("abc", VerificationOption{TargetScopes: []string{"scope"}, Action: "", Resource: "resource", Context: nil, NumRetry: &minus_one})
 					Expect(err).To(BeNil())
 					Expect(t).To(Equal(map[string]interface{}{"allowed": true}))
 				})
@@ -243,7 +251,7 @@ var _ = Describe("Service", func() {
 							fmt.Fprintf(w, "bad")
 						}
 					}
-					t, err := service.verifyTokenForResourceContext("abc", []string{"scope"}, "", "resource", nil, -1)
+					t, err := service.verifyToken("abc", VerificationOption{TargetScopes: []string{"scope"}, Action: "", Resource: "resource", Context: nil, NumRetry: &minus_one})
 					Expect(err).NotTo(BeNil())
 					Expect(t).To(BeNil())
 				})
@@ -275,6 +283,44 @@ var _ = Describe("Service", func() {
 		Context("with invalid time string", func() {
 			It("returns the default expiry time", func() {
 				Expect(service.expiryTime("a")).To(Equal(service.DefaultExpTime))
+			})
+		})
+	})
+
+	Describe("#buildOption", func() {
+		BeforeEach(func() {
+			service.Context = map[string]interface{}{"test": "default"}
+		})
+		Context("with prefilled option", func() {
+			It("the option remains the same values", func() {
+				numRetry := 3
+				opt := VerificationOption{
+					Resource:     "resource",
+					Context:      map[string]interface{}{"test": "context"},
+					TargetScopes: []string{"target"},
+					NumRetry:     &numRetry,
+					Action:       "action",
+				}
+				service.buildOption(&opt)
+				Expect(opt.Resource).To(Equal("resource"))
+				Expect(opt.Context["test"]).To(Equal("context"))
+				Expect(opt.TargetScopes).To(Equal([]string{"target"}))
+				Expect(opt.NumRetry).NotTo(BeNil())
+				Expect(*opt.NumRetry).To(Equal(numRetry))
+				Expect(opt.Action).To(Equal("action"))
+			})
+		})
+
+		Context("without prefilled option", func() {
+			It("uses the default values from service structs", func() {
+				opt := VerificationOption{}
+				service.buildOption(&opt)
+				Expect(opt.Resource).To(Equal("r"))
+				Expect(opt.Context["test"]).To(Equal("default"))
+				Expect(opt.TargetScopes).To(BeEmpty())
+				Expect(opt.NumRetry).NotTo(BeNil())
+				Expect(*opt.NumRetry).To(Equal(0))
+				Expect(opt.Action).To(Equal(""))
 			})
 		})
 	})
