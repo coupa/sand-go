@@ -321,7 +321,7 @@ var _ = Describe("Sand", func() {
 						fmt.Fprintf(w, string(exp))
 					}
 					token, err := client.Token("resource", []string{"scope"}, -1)
-					Expect(err).To(Equal(AuthenticationError{"Invalid access token"}))
+					Expect(err).To(Equal(AuthenticationError{"oauth2: server response missing access_token"}))
 					Expect(token).To(Equal(""))
 
 					handler = func(w http.ResponseWriter, r *http.Request) {
@@ -335,7 +335,7 @@ var _ = Describe("Sand", func() {
 						fmt.Fprintf(w, string(exp))
 					}
 					token, err = client.Token("resource", []string{"scope"}, -1)
-					Expect(err).To(Equal(AuthenticationError{"Invalid access token"}))
+					Expect(err).To(Equal(AuthenticationError{"oauth2: server response missing access_token"}))
 					Expect(token).To(Equal(""))
 				})
 			})
@@ -373,15 +373,14 @@ var _ = Describe("Sand", func() {
 			})
 
 			Context("with an empty response", func() {
-				It("returns an empty oauth token", func() {
+				It("returns an oauth2 error", func() {
 					handler = func(w http.ResponseWriter, r *http.Request) {
 						resp := map[string]interface{}{}
 						exp, _ := json.Marshal(resp)
 						fmt.Fprintf(w, string(exp))
 					}
-					token, err := client.oauthToken([]string{"scope"}, -1)
-					Expect(err).To(BeNil())
-					Expect(token.AccessToken).To(Equal(""))
+					_, err := client.oauthToken([]string{"scope"}, -1)
+					Expect(err).To(Equal(AuthenticationError{"oauth2: server response missing access_token"}))
 				})
 			})
 

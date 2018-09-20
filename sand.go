@@ -137,9 +137,6 @@ func (c *Client) Token(cacheKey string, scopes []string, numRetry int) (string, 
 	if err != nil {
 		return "", err
 	}
-	if token.AccessToken == "" {
-		return "", AuthenticationError{"Invalid access token"}
-	}
 	if c.Cache != nil && cacheKey != "" {
 		expiresIn := 0
 		//If token.Expiry is zero, it means no limit. Otherwise we compute the limit.
