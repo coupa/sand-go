@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/coupa/sand-go/cache"
+	log "github.com/sirupsen/logrus"
 
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2"
@@ -101,7 +102,7 @@ func (c *Client) RequestWithCustomRetry(cacheKey string, scopes []string, numRet
 		//Get a fresh token from authentication service and retry.
 		for retry := 0; resp.StatusCode == http.StatusUnauthorized && retry < clientRetry; retry++ {
 			sleep := time.Duration(math.Pow(2, float64(retry)))
-			logger.Warnf("Sand request: retrying after %d sec on %d", sleep, http.StatusUnauthorized)
+			log.Warnf("Sand request: retrying after %d sec on %d", sleep, http.StatusUnauthorized)
 			time.Sleep(sleep * time.Second)
 			//Prevent reading from cache on retry
 			if c.Cache != nil {
@@ -172,7 +173,7 @@ func (c *Client) oauthToken(scopes []string, numRetry int) (token *oauth2.Token,
 		for retry := 0; err != nil && retry < numRetry; retry++ {
 			//Exponential backoff on the retry
 			sleep := time.Duration(math.Pow(2, float64(retry)))
-			logger.Warnf("Sand token: retrying after %d sec because of error: %v", sleep, err)
+			log.Warnf("Sand token: retrying after %d sec because of error: %v", sleep, err)
 			time.Sleep(sleep * time.Second)
 			token, err = config.Token(ctx)
 		}

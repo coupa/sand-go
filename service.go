@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"crypto/tls"
 	"encoding/json"
+	"fmt"
 	"errors"
 	"io/ioutil"
 	"net/http"
-	"strconv"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -95,7 +97,7 @@ func (s *Service) VerifyRequest(r *http.Request, opt VerificationOption) (map[st
 	token := ExtractToken(r.Header.Get("Authorization"))
 	rv, err := s.VerifyTokenWithCache(token, opt)
 	if err != nil {
-		logger.Errorf("auth error: %v", err)
+		log.Error(err)
 		err = AuthenticationError{"Service failed to verify the token: " + err.Error()}
 	}
 	return rv, err
@@ -197,11 +199,20 @@ func (s *Service) verifyToken(token string, opt VerificationOption) (map[string]
 	if err != nil {
 		return nil, err
 	}
-	if resp.StatusCode != 200 {
-		return nil, AuthenticationError{"Error response from the authentication service: " + strconv.Itoa(resp.StatusCode)}
-	}
+
 	defer resp.Body.Close()
 	body, _ := ioutil.ReadAll(resp.Body)
+
+	if resp.StatusCode != 200 {
+		str := fmt.Sprintf("Error response from the authentication service: %d - %s", resp.StatusCode, body)
+		if resp.StatusCode == 500 {
+			//When the response is 500, the token may be expired. So let the client retry
+			//and return 401 by returning nil, so that the result is not cached.
+			log.Error(str)
+			return nil, nil
+		}
+		return nil, AuthenticationError{Message: str}
+	}
 	var result map[string]interface{}
 	err = json.Unmarshal(body, &result)
 	return result, err

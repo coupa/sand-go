@@ -238,8 +238,26 @@ var _ = Describe("Service", func() {
 				})
 			})
 
+			Context("with 500 response when verifying a token", func() {
+				It("returns nil", func() {
+					handler = func(w http.ResponseWriter, r *http.Request) {
+						var resp map[string]interface{}
+						if r.RequestURI == "/" {
+							resp = map[string]interface{}{"access_token": "def"}
+							exp, _ := json.Marshal(resp)
+							fmt.Fprintf(w, string(exp))
+						} else if r.RequestURI == "/v" {
+							w.WriteHeader(http.StatusInternalServerError)
+						}
+					}
+					t, err := service.verifyToken("abc", VerificationOption{TargetScopes: []string{"scope"}, Action: "", Resource: "resource", Context: nil, NumRetry: &minus_one})
+					Expect(err).To(BeNil())
+					Expect(t).To(BeNil())
+				})
+			})
+
 			Context("with an invalid json response when verifying token", func() {
-				It("", func() {
+				It("returns an error", func() {
 					handler = func(w http.ResponseWriter, r *http.Request) {
 						var resp map[string]interface{}
 						if r.RequestURI == "/" {
