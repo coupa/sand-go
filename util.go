@@ -3,12 +3,6 @@ package sand
 import (
 	"strings"
 
-	"github.com/sirupsen/logrus"
-)
-
-var (
-	//logger is used to log detail errors
-	logger = logrus.New()
 )
 
 //ExtractToken extracts a bearer token from the Authorization header.
