@@ -8,6 +8,8 @@ import (
 	"net/http/httptest"
 	"time"
 
+	"github.com/coupa/sand-go/cache"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -341,7 +343,45 @@ var _ = Describe("Sand", func() {
 			})
 		})
 
-		Describe("#oauthToken", func() {
+		Describe("#OAuth2Token", func() {
+			Context("with a valid response", func() {
+				BeforeEach(func() {
+					client.Cache = cache.NewGoCache(10, 10)
+				})
+				It("caches the token", func() {
+					var oneTime bool
+					//Let the handler respond with good token for one time. Afterwards it
+					//responds with "bad." So if the cache is not working, we'll get "bad"
+					//on subsequent token requests.
+					handler = func(w http.ResponseWriter, r *http.Request) {
+						if oneTime {
+							fmt.Fprintf(w, "bad")
+							return
+						}
+						resp := map[string]interface{}{
+							"access_token": "abc",
+							"expires_in":   "3600",
+							"scope":        "",
+							"token_type":   "bearer",
+						}
+						exp, _ := json.Marshal(resp)
+						oneTime = true
+						fmt.Fprintf(w, string(exp))
+					}
+					token, err := client.OAuth2Token("resource", []string{"scope"}, -1)
+					Expect(err).To(BeNil())
+					Expect(token.AccessToken).To(Equal("abc"))
+					value := client.Cache.Read(client.cacheKey("resource", []string{"scope"}, ""))
+					Expect(value).To(Equal(*token))
+
+					token, err = client.OAuth2Token("resource", []string{"scope"}, -1)
+					Expect(err).To(BeNil())
+					Expect(*token).To(Equal(value))
+				})
+			})
+		})
+
+		Describe("#OAuth2TokenWithoutCaching", func() {
 			Context("with a valid response", func() {
 				It("returns the token", func() {
 					handler = func(w http.ResponseWriter, r *http.Request) {
@@ -354,7 +394,7 @@ var _ = Describe("Sand", func() {
 						exp, _ := json.Marshal(resp)
 						fmt.Fprintf(w, string(exp))
 					}
-					token, err := client.oauthToken([]string{"scope"}, -1)
+					token, err := client.OAuth2TokenWithoutCaching([]string{"scope"}, -1)
 					Expect(err).To(BeNil())
 					Expect(token.AccessToken).To(Equal("abc"))
 				})
@@ -366,7 +406,7 @@ var _ = Describe("Sand", func() {
 						exp, _ := json.Marshal(resp)
 						fmt.Fprintf(w, string(exp))
 					}
-					token, err := client.oauthToken([]string{"scope"}, -1)
+					token, err := client.OAuth2TokenWithoutCaching([]string{"scope"}, -1)
 					Expect(err).To(BeNil())
 					Expect(token.AccessToken).To(Equal("abc"))
 				})
@@ -379,7 +419,7 @@ var _ = Describe("Sand", func() {
 						exp, _ := json.Marshal(resp)
 						fmt.Fprintf(w, string(exp))
 					}
-					_, err := client.oauthToken([]string{"scope"}, -1)
+					_, err := client.OAuth2TokenWithoutCaching([]string{"scope"}, -1)
 					Expect(err).To(Equal(AuthenticationError{"oauth2: server response missing access_token"}))
 				})
 			})
@@ -391,7 +431,7 @@ var _ = Describe("Sand", func() {
 					}
 				})
 				It("returns an error", func() {
-					token, err := client.oauthToken([]string{"scope"}, -1)
+					token, err := client.OAuth2TokenWithoutCaching([]string{"scope"}, -1)
 					_, yes := err.(AuthenticationError)
 					Expect(yes).To(BeTrue())
 					Expect(token).To(BeNil())
@@ -402,7 +442,7 @@ var _ = Describe("Sand", func() {
 						client.DefaultRetryCount = 2
 						t1 := time.Now().Unix()
 						//Retry should sleep two times: 1 + 2 = 3 seconds
-						token, err := client.oauthToken([]string{"scope"}, -1)
+						token, err := client.OAuth2TokenWithoutCaching([]string{"scope"}, -1)
 						t2 := time.Now().Unix()
 						Expect(t2 - t1).To(BeNumerically(">=", 3))
 						_, yes := err.(AuthenticationError)
@@ -414,7 +454,7 @@ var _ = Describe("Sand", func() {
 			Context("with connection error", func() {
 				It("returns a sand.AuthenticationError", func() {
 					client.TokenURL = ""
-					token, err := client.oauthToken([]string{"scope"}, -1)
+					token, err := client.OAuth2TokenWithoutCaching([]string{"scope"}, -1)
 					Expect(token).To(BeNil())
 					_, yes := err.(AuthenticationError)
 					Expect(yes).To(BeTrue())
@@ -431,6 +471,8 @@ var _ = Describe("Sand", func() {
 
 			Expect(client.cacheKey("hello", []string{"a", "b"}, "")).To(Equal(client.CacheRoot + "/" + client.cacheType + "/hello/a_b"))
 			Expect(client.cacheKey("", []string{"a"}, "")).To(Equal(client.CacheRoot + "/" + client.cacheType + "//a"))
+
+			Expect(client.cacheKey("hello", []string{"a", "b"}, "resource")).To(Equal(client.CacheRoot + "/" + client.cacheType + "/hello/a_b/resource"))
 		})
 	})
 

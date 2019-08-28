@@ -123,20 +123,32 @@ func (c *Client) RequestWithCustomRetry(cacheKey string, scopes []string, numRet
 	return resp, err
 }
 
-//Token returns an OAuth token retrieved from the OAuth2 server. It also puts the
+//Token returns an OAuth2 token string retrieved from the OAuth2 server. It also puts the
 //token in the cache up to specified amount of time.
 func (c *Client) Token(cacheKey string, scopes []string, numRetry int) (string, error) {
+	token, err := c.OAuth2Token(cacheKey, scopes, numRetry)
+	if err == nil {
+		return token.AccessToken, err
+	}
+	return "", err
+}
+
+//OAuth2Token returns an OAuth2 token retrieved from the OAuth2 server. It also puts the
+//token in the cache up to specified amount of time.
+func (c *Client) OAuth2Token(cacheKey string, scopes []string, numRetry int) (*oauth2.Token, error) {
 	var ckey string
 	if c.Cache != nil && cacheKey != "" {
 		ckey = c.cacheKey(cacheKey, scopes, "")
-		token := c.Cache.Read(ckey)
-		if token != nil {
-			return token.(string), nil
+		value := c.Cache.Read(ckey)
+		if value != nil {
+			if tk, ok := value.(oauth2.Token); ok {
+				return &tk, nil
+			}
 		}
 	}
-	token, err := c.oauthToken(scopes, numRetry)
+	token, err := c.OAuth2TokenWithoutCaching(scopes, numRetry)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	if c.Cache != nil && cacheKey != "" {
 		expiresIn := 0
@@ -145,15 +157,15 @@ func (c *Client) Token(cacheKey string, scopes []string, numRetry int) (string, 
 			expiresIn = int(token.Expiry.Unix() - time.Now().Unix())
 		}
 		if expiresIn >= 0 {
-			c.Cache.Write(ckey, token.AccessToken, time.Duration(expiresIn)*time.Second)
+			c.Cache.Write(ckey, *token, time.Duration(expiresIn)*time.Second)
 		}
 	}
-	return token.AccessToken, nil
+	return token, nil
 }
 
-//oauthToken makes the connection to the OAuth server and returns oauth2.Token
+//OAuth2TokenWithoutCaching makes the connection to the OAuth server and returns oauth2.Token
 //The returned token could have empty accessToken.
-func (c *Client) oauthToken(scopes []string, numRetry int) (token *oauth2.Token, err error) {
+func (c *Client) OAuth2TokenWithoutCaching(scopes []string, numRetry int) (token *oauth2.Token, err error) {
 	numRetry = c.tokenRequestRetryCount(numRetry)
 
 	client := &http.Client{Transport: &http.Transport{
