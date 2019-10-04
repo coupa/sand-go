@@ -16,6 +16,10 @@ import (
 	"golang.org/x/oauth2/clientcredentials"
 )
 
+const (
+	defaultExpiryTime = 3595 * time.Second
+)
+
 //Client can be used to request token from an OAuth2 server
 type Client struct {
 	//The client ID of the OAuth2 client credentials
@@ -46,8 +50,19 @@ type Client struct {
 	cacheType string
 }
 
-//NewClient returns a Client with default option values.
+//NewClient returns a Client with default option values. The default expiration
+//time is set to 3595 seconds.
+//If you don't want to use a cache for some very convincing reason, you can set
+//client's Cache to nil.
 func NewClient(id, secret, tokenURL string) (client *Client, err error) {
+	return NewClientWithExpiration(id, secret, tokenURL, defaultExpiryTime)
+}
+
+//NewClientWithExpiration returns a Client with default option values with specified
+//expiration time on the cache.
+//If you don't want to use a cache for some very convincing reason, you can set
+//client's Cache to nil.
+func NewClientWithExpiration(id, secret, tokenURL string, cacheExpiration time.Duration) (client *Client, err error) {
 	if id == "" || secret == "" || tokenURL == "" {
 		err = errors.New("NewClient: missing required argument(s)")
 		return
@@ -58,7 +73,7 @@ func NewClient(id, secret, tokenURL string) (client *Client, err error) {
 		TokenURL:          tokenURL,
 		SkipTLSVerify:     false,
 		DefaultRetryCount: 5,
-		Cache:             nil,
+		Cache:             cache.NewGoCache(cacheExpiration, cacheExpiration),
 		CacheRoot:         "sand",
 		cacheType:         "resources",
 	}
