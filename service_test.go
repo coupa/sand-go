@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"time"
 
+	"github.com/coupa/sand-go/cache"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -75,6 +76,7 @@ var _ = Describe("Service", func() {
 	var service *Service
 
 	BeforeEach(func() {
+		caches = map[time.Duration]cache.Cache{}
 		service, _ = NewService("i", "s", "u", "r", "/v", []string{"scope"})
 		service.DefaultRetryCount = 0
 	})
@@ -85,6 +87,17 @@ var _ = Describe("Service", func() {
 			Expect(err.Error()).To(Equal("NewService: missing required argument(s)"))
 			_, err = NewService("i", "s", "u", "", "/v", []string{"scope"})
 			Expect(err.Error()).To(Equal("NewService: missing required argument(s)"))
+		})
+
+		It("uses the same global cache", func() {
+			c1, err := NewService("c", "s", "u", "r", "/v", []string{"scope"})
+			Expect(err).To(BeNil())
+
+			c2, err := NewClient("a", "s", "u")
+			Expect(err).To(BeNil())
+
+			Expect(c2.Cache).To(Equal(caches[defaultExpiryTime]))
+			Expect(c1.Cache).To(Equal(c2.Cache))
 		})
 	})
 
