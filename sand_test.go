@@ -18,6 +18,7 @@ var _ = Describe("Sand", func() {
 	var client *Client
 
 	BeforeEach(func() {
+		caches = map[time.Duration]cache.Cache{}
 		client, _ = NewClient("i", "s", "u")
 		client.DefaultRetryCount = 0
 	})
@@ -26,6 +27,26 @@ var _ = Describe("Sand", func() {
 		It("gives error when missing required arguments", func() {
 			_, err := NewClient("", "s", "u")
 			Expect(err.Error()).To(Equal("NewClient: missing required argument(s)"))
+		})
+
+		It("uses the same global cache", func() {
+			c1, err := NewClient("a", "s", "u")
+			Expect(err).To(BeNil())
+
+			c2, err := NewClient("a", "s", "u")
+			Expect(err).To(BeNil())
+			Expect(c1.Cache).To(Equal(caches[defaultExpiryTime]))
+			Expect(c1.Cache).To(Equal(c2.Cache))
+		})
+
+		It("uses the same global cache with custom expiry time", func() {
+			c1, err := NewClientWithExpiration("a", "s", "u", time.Second)
+			Expect(err).To(BeNil())
+
+			c2, err := NewClientWithExpiration("a", "s", "u", time.Second)
+			Expect(err).To(BeNil())
+			Expect(c1.Cache).To(Equal(caches[time.Second]))
+			Expect(c1.Cache).To(Equal(c2.Cache))
 		})
 	})
 

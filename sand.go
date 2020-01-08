@@ -17,7 +17,11 @@ import (
 )
 
 const (
-	defaultExpiryTime = 3595 * time.Second
+	defaultExpiryTime = 3598 * time.Second
+)
+
+var (
+	caches = map[time.Duration]cache.Cache{}
 )
 
 //Client can be used to request token from an OAuth2 server
@@ -51,18 +55,31 @@ type Client struct {
 }
 
 //NewClient returns a Client with default option values. The default expiration
-//time is set to 3595 seconds.
+//time is set to 3598 seconds.
 //If you don't want to use a cache for some very convincing reason, you can set
 //client's Cache to nil.
 func NewClient(id, secret, tokenURL string) (client *Client, err error) {
-	return NewClientWithExpiration(id, secret, tokenURL, defaultExpiryTime)
+	if caches[defaultExpiryTime] == nil {
+		caches[defaultExpiryTime] = cache.NewGoCache(defaultExpiryTime, defaultExpiryTime)
+	}
+	return NewClientWithCache(id, secret, tokenURL, caches[defaultExpiryTime])
 }
 
-//NewClientWithExpiration returns a Client with default option values with specified
+//NewClientWithExpiration returns a Client with default option values and specified
 //expiration time on the cache.
 //If you don't want to use a cache for some very convincing reason, you can set
 //client's Cache to nil.
 func NewClientWithExpiration(id, secret, tokenURL string, cacheExpiration time.Duration) (client *Client, err error) {
+	if caches[cacheExpiration] == nil {
+		caches[cacheExpiration] = cache.NewGoCache(cacheExpiration, cacheExpiration)
+	}
+	return NewClientWithCache(id, secret, tokenURL, caches[cacheExpiration])
+}
+
+//NewClientWithCache returns a Client with default option values and a specified cache
+//If you don't want to use a cache for some very convincing reason, you can set
+//client's Cache to nil.
+func NewClientWithCache(id, secret, tokenURL string, cache cache.Cache) (client *Client, err error) {
 	if id == "" || secret == "" || tokenURL == "" {
 		err = errors.New("NewClient: missing required argument(s)")
 		return
@@ -73,7 +90,7 @@ func NewClientWithExpiration(id, secret, tokenURL string, cacheExpiration time.D
 		TokenURL:          tokenURL,
 		SkipTLSVerify:     false,
 		DefaultRetryCount: 5,
-		Cache:             cache.NewGoCache(cacheExpiration, cacheExpiration),
+		Cache:             cache,
 		CacheRoot:         "sand",
 		cacheType:         "resources",
 	}
