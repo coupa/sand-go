@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"crypto/tls"
 	"encoding/json"
-	"fmt"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"time"
@@ -183,7 +183,7 @@ func (s *Service) verifyToken(token string, opt VerificationOption) (map[string]
 		return nil, err
 	}
 	client := &http.Client{Transport: &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: s.SkipTLSVerify},
+		TLSClientConfig: &tls.Config{MinVersion: s.SSLMinVersion},
 	}}
 	data := map[string]interface{}{
 		"scopes":   opt.TargetScopes,
