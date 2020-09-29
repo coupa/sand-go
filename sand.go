@@ -202,6 +202,7 @@ func (c *Client) OAuth2TokenWithoutCaching(scopes []string, numRetry int) (token
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.TLSClientConfig.InsecureSkipVerify = c.SkipTLSVerify
 	client := &http.Client{Transport: transport}
+
 	ctx := context.TODO()
 	ctx = context.WithValue(ctx, oauth2.HTTPClient, client)
 

@@ -312,6 +312,7 @@ var _ = Describe("Service", func() {
 				})
 			})
 
+			// these are the tests that require the proxy environment setup in BeforeSuite and AfterSuite
 			Context("with a proxy blocking the request", func() {
 				It("returns an error getting token", func() {
 					service.TokenURL = "http://sand.test"

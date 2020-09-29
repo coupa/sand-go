@@ -181,9 +181,11 @@ func (s *Service) verifyToken(token string, opt VerificationOption) (map[string]
 	if err != nil {
 		return nil, err
 	}
+
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.TLSClientConfig.InsecureSkipVerify = s.SkipTLSVerify
 	client := &http.Client{Transport: transport}
+
 	data := map[string]interface{}{
 		"scopes":   opt.TargetScopes,
 		"token":    token,
