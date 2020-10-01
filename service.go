@@ -2,10 +2,9 @@ package sand
 
 import (
 	"bytes"
-	"crypto/tls"
 	"encoding/json"
-	"fmt"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"time"
@@ -182,9 +181,11 @@ func (s *Service) verifyToken(token string, opt VerificationOption) (map[string]
 	if err != nil {
 		return nil, err
 	}
-	client := &http.Client{Transport: &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: s.SkipTLSVerify},
-	}}
+
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.TLSClientConfig.InsecureSkipVerify = s.SkipTLSVerify
+	client := &http.Client{Transport: transport}
+
 	data := map[string]interface{}{
 		"scopes":   opt.TargetScopes,
 		"token":    token,

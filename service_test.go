@@ -5,11 +5,18 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"time"
 
 	"github.com/coupa/sand-go/cache"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+)
+
+var (
+	oldProxy    string
+	oldProxySet bool
+	ps          *httptest.Server
 )
 
 func ItBehavesLikeVerifyTokenWithCache(handler *func(http.ResponseWriter, *http.Request), subject func(string, []string, string, int) (map[string]interface{}, error)) {
@@ -71,6 +78,23 @@ func ItBehavesLikeVerifyTokenWithCache(handler *func(http.ResponseWriter, *http.
 		})
 	})
 }
+
+var _ = BeforeSuite(func() {
+	oldProxy, oldProxySet = os.LookupEnv("HTTP_PROXY")
+	ps = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	os.Setenv("HTTP_PROXY", ps.URL)
+})
+
+var _ = AfterSuite(func() {
+	if oldProxySet {
+		os.Setenv("HTTP_PROXY", oldProxy)
+	} else {
+		os.Unsetenv("HTTP_PROXY")
+	}
+	ps.Close()
+})
 
 var _ = Describe("Service", func() {
 	var service *Service
@@ -285,6 +309,35 @@ var _ = Describe("Service", func() {
 					t, err := service.verifyToken("abc", VerificationOption{TargetScopes: []string{"scope"}, Action: "", Resource: "resource", Context: nil, NumRetry: &minus_one})
 					Expect(err).NotTo(BeNil())
 					Expect(t).To(BeNil())
+				})
+			})
+
+			// these are the tests that require the proxy environment setup in BeforeSuite and AfterSuite
+			Context("with a proxy blocking the request", func() {
+				It("returns an error getting token", func() {
+					service.TokenURL = "http://sand.test"
+					service.TokenVerifyURL = service.TokenURL + "/v"
+					t, err := service.verifyToken("abc", VerificationOption{TargetScopes: []string{"scope"}, Action: "", Resource: "resource", Context: nil, NumRetry: &minus_one})
+					Expect(t).To(BeNil())
+					Expect(err).To(MatchError(AuthenticationError{Message: "oauth2: cannot fetch token: 403 Forbidden\nResponse: "}))
+				})
+
+				It("returns an error verifying token", func() {
+					service.TokenVerifyURL = "http://sand.test/v"
+					handler = func(w http.ResponseWriter, r *http.Request) {
+						var resp map[string]interface{}
+						if r.RequestURI == "/" {
+							resp = map[string]interface{}{"access_token": "def"}
+						} else if r.RequestURI == "/v" {
+							Expect(r.Header.Get("Authorization")).To(Equal("Bearer def"))
+							resp = map[string]interface{}{"allowed": true}
+						}
+						exp, _ := json.Marshal(resp)
+						fmt.Fprintf(w, string(exp))
+					}
+					t, err := service.verifyToken("abc", VerificationOption{TargetScopes: []string{"scope"}, Action: "", Resource: "resource", Context: nil, NumRetry: &minus_one})
+					Expect(t).To(BeNil())
+					Expect(err).To(MatchError(AuthenticationError{Message: "Error response from the authentication service: 403 - "}))
 				})
 			})
 		})
