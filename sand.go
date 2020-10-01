@@ -199,9 +199,10 @@ func (c *Client) OAuth2Token(cacheKey string, scopes []string, numRetry int) (*o
 func (c *Client) OAuth2TokenWithoutCaching(scopes []string, numRetry int) (token *oauth2.Token, err error) {
 	numRetry = c.tokenRequestRetryCount(numRetry)
 
-	client := &http.Client{Transport: &http.Transport{
-		TLSClientConfig: &tls.Config{MinVersion: c.SSLMinVersion},
-	}}
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.TLSClientConfig.MinVersion = c.SSLMinVersion
+	client := &http.Client{Transport: transport}
+
 	ctx := context.TODO()
 	ctx = context.WithValue(ctx, oauth2.HTTPClient, client)
 

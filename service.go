@@ -2,7 +2,6 @@ package sand
 
 import (
 	"bytes"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -182,9 +181,11 @@ func (s *Service) verifyToken(token string, opt VerificationOption) (map[string]
 	if err != nil {
 		return nil, err
 	}
-	client := &http.Client{Transport: &http.Transport{
-		TLSClientConfig: &tls.Config{MinVersion: s.SSLMinVersion},
-	}}
+
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.TLSClientConfig.MinVersion = s.SSLMinVersion
+	client := &http.Client{Transport: transport}
+
 	data := map[string]interface{}{
 		"scopes":   opt.TargetScopes,
 		"token":    token,
