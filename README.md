@@ -23,7 +23,7 @@ A client that intends to communicate with a service can use sand.Client to reque
 client := sand.NewClient("ClientID", "ClientSecret", "TokenURL")
 
 //Below shows the optional fields (with their default values) that can be modified after a client is created
-client.SkipTLSVerify = false   // Skip verifying the TLS certificate
+client.SSLMinVersion = tls.VersionTLS12 // Minimum version of SSL supported
 client.MaxRetry      = 5       // Maximum number of retries on connection error
 client.Cache         = nil     // A cache that conforms to the sand.Cache interface
 client.CacheRoot     = "sand"  // A string as the root namespace in the cache

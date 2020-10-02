@@ -42,6 +42,7 @@ type Service struct {
 	Scopes []string
 }
 
+// VerificationOption affects how tokens are verified
 type VerificationOption struct {
 	TargetScopes []string
 	Resource     string
@@ -90,14 +91,13 @@ func (s *Service) CheckRequestWithCustomRetry(r *http.Request, targetScopes []st
 	return s.VerifyRequest(r, VerificationOption{TargetScopes: targetScopes, Action: action, NumRetry: &numRetry})
 }
 
-//VerifyRequest
+//VerifyRequest takes the token in a request and verifies with SAND
 //Remember to set a reasonable NumRetry value (>= 0) for the VerificationOption
 func (s *Service) VerifyRequest(r *http.Request, opt VerificationOption) (map[string]interface{}, error) {
 	token := ExtractToken(r.Header.Get("Authorization"))
 	rv, err := s.VerifyTokenWithCache(token, opt)
 	if err != nil {
 		log.Error(err)
-		err = AuthenticationError{"Service failed to verify the token: " + err.Error()}
 	}
 	return rv, err
 }
@@ -183,7 +183,7 @@ func (s *Service) verifyToken(token string, opt VerificationOption) (map[string]
 	}
 
 	transport := http.DefaultTransport.(*http.Transport).Clone()
-	transport.TLSClientConfig.InsecureSkipVerify = s.SkipTLSVerify
+	transport.TLSClientConfig.MinVersion = s.SSLMinVersion
 	client := &http.Client{Transport: transport}
 
 	data := map[string]interface{}{
@@ -198,7 +198,7 @@ func (s *Service) verifyToken(token string, opt VerificationOption) (map[string]
 	req.Header.Add("Authorization", "Bearer "+accessToken)
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, AuthenticationError{"Service failed to verify the token: " + err.Error()}
 	}
 
 	defer resp.Body.Close()

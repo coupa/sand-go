@@ -1,6 +1,7 @@
 package sand
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -129,6 +130,17 @@ var _ = Describe("Service", func() {
 		var ts *httptest.Server
 		var handler func(http.ResponseWriter, *http.Request)
 		BeforeEach(func() {
+			handler = func(w http.ResponseWriter, r *http.Request) {
+				var resp map[string]interface{}
+				if r.RequestURI == "/" {
+					resp = map[string]interface{}{"access_token": "def"}
+				} else if r.RequestURI == "/v" {
+					Expect(r.Header.Get("Authorization")).To(Equal("Bearer def"))
+					resp = map[string]interface{}{"allowed": true}
+				}
+				exp, _ := json.Marshal(resp)
+				fmt.Fprintf(w, string(exp))
+			}
 			ts = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
 				handler(w, r)
@@ -170,14 +182,6 @@ var _ = Describe("Service", func() {
 
 			Context("with service unable to verify an access token", func() {
 				It("returns an error of type sand.AuthenticationError", func() {
-					handler = func(w http.ResponseWriter, r *http.Request) {
-						var resp map[string]interface{}
-						if r.RequestURI == "/" {
-							resp = map[string]interface{}{"access_token": "def"}
-						}
-						exp, _ := json.Marshal(resp)
-						fmt.Fprintf(w, string(exp))
-					}
 					service.TokenVerifyURL = ""
 					r := http.Request{Header: http.Header{}}
 					r.Header.Set("Authorization", "Bearer abc")
@@ -235,10 +239,10 @@ var _ = Describe("Service", func() {
 		})
 
 		Describe("#verifyToken", func() {
-			minus_one := -1
+			minusOne := -1
 			Context("with empty token", func() {
 				It("returns nil", func() {
-					t, err := service.verifyToken("", VerificationOption{TargetScopes: []string{"scope"}, Action: "", Resource: "resource", Context: nil, NumRetry: &minus_one})
+					t, err := service.verifyToken("", VerificationOption{TargetScopes: []string{"scope"}, Action: "", Resource: "resource", Context: nil, NumRetry: &minusOne})
 					Expect(t).To(BeNil())
 					Expect(err).To(BeNil())
 				})
@@ -249,7 +253,7 @@ var _ = Describe("Service", func() {
 					handler = func(w http.ResponseWriter, r *http.Request) {
 						w.WriteHeader(http.StatusNotFound)
 					}
-					t, err := service.verifyToken("abc", VerificationOption{TargetScopes: []string{"scope"}, Action: "", Resource: "resource", Context: nil, NumRetry: &minus_one})
+					t, err := service.verifyToken("abc", VerificationOption{TargetScopes: []string{"scope"}, Action: "", Resource: "resource", Context: nil, NumRetry: &minusOne})
 					Expect(t).To(BeNil())
 					_, yes := err.(AuthenticationError)
 					Expect(yes).To(BeTrue())
@@ -258,18 +262,7 @@ var _ = Describe("Service", func() {
 
 			Context("with a valid token and valid response", func() {
 				It("returns allowed response", func() {
-					handler = func(w http.ResponseWriter, r *http.Request) {
-						var resp map[string]interface{}
-						if r.RequestURI == "/" {
-							resp = map[string]interface{}{"access_token": "def"}
-						} else if r.RequestURI == "/v" {
-							Expect(r.Header.Get("Authorization")).To(Equal("Bearer def"))
-							resp = map[string]interface{}{"allowed": true}
-						}
-						exp, _ := json.Marshal(resp)
-						fmt.Fprintf(w, string(exp))
-					}
-					t, err := service.verifyToken("abc", VerificationOption{TargetScopes: []string{"scope"}, Action: "", Resource: "resource", Context: nil, NumRetry: &minus_one})
+					t, err := service.verifyToken("abc", VerificationOption{TargetScopes: []string{"scope"}, Action: "", Resource: "resource", Context: nil, NumRetry: &minusOne})
 					Expect(err).To(BeNil())
 					Expect(t).To(Equal(map[string]interface{}{"allowed": true}))
 				})
@@ -287,7 +280,7 @@ var _ = Describe("Service", func() {
 							w.WriteHeader(http.StatusInternalServerError)
 						}
 					}
-					t, err := service.verifyToken("abc", VerificationOption{TargetScopes: []string{"scope"}, Action: "", Resource: "resource", Context: nil, NumRetry: &minus_one})
+					t, err := service.verifyToken("abc", VerificationOption{TargetScopes: []string{"scope"}, Action: "", Resource: "resource", Context: nil, NumRetry: &minusOne})
 					Expect(err).To(BeNil())
 					Expect(t).To(BeNil())
 				})
@@ -306,38 +299,64 @@ var _ = Describe("Service", func() {
 							fmt.Fprintf(w, "bad")
 						}
 					}
-					t, err := service.verifyToken("abc", VerificationOption{TargetScopes: []string{"scope"}, Action: "", Resource: "resource", Context: nil, NumRetry: &minus_one})
+					t, err := service.verifyToken("abc", VerificationOption{TargetScopes: []string{"scope"}, Action: "", Resource: "resource", Context: nil, NumRetry: &minusOne})
 					Expect(err).NotTo(BeNil())
 					Expect(t).To(BeNil())
 				})
 			})
 
-			// these are the tests that require the proxy environment setup in BeforeSuite and AfterSuite
 			Context("with a proxy blocking the request", func() {
 				It("returns an error getting token", func() {
 					service.TokenURL = "http://sand.test"
 					service.TokenVerifyURL = service.TokenURL + "/v"
-					t, err := service.verifyToken("abc", VerificationOption{TargetScopes: []string{"scope"}, Action: "", Resource: "resource", Context: nil, NumRetry: &minus_one})
+					t, err := service.verifyToken("abc", VerificationOption{TargetScopes: []string{"scope"}, Action: "", Resource: "resource", Context: nil, NumRetry: &minusOne})
 					Expect(t).To(BeNil())
 					Expect(err).To(MatchError(AuthenticationError{Message: "oauth2: cannot fetch token: 403 Forbidden\nResponse: "}))
 				})
 
 				It("returns an error verifying token", func() {
 					service.TokenVerifyURL = "http://sand.test/v"
-					handler = func(w http.ResponseWriter, r *http.Request) {
-						var resp map[string]interface{}
-						if r.RequestURI == "/" {
-							resp = map[string]interface{}{"access_token": "def"}
-						} else if r.RequestURI == "/v" {
-							Expect(r.Header.Get("Authorization")).To(Equal("Bearer def"))
-							resp = map[string]interface{}{"allowed": true}
-						}
-						exp, _ := json.Marshal(resp)
-						fmt.Fprintf(w, string(exp))
-					}
-					t, err := service.verifyToken("abc", VerificationOption{TargetScopes: []string{"scope"}, Action: "", Resource: "resource", Context: nil, NumRetry: &minus_one})
+					t, err := service.verifyToken("abc", VerificationOption{TargetScopes: []string{"scope"}, Action: "", Resource: "resource", Context: nil, NumRetry: &minusOne})
 					Expect(t).To(BeNil())
 					Expect(err).To(MatchError(AuthenticationError{Message: "Error response from the authentication service: 403 - "}))
+				})
+			})
+
+			Context("with a TLS server whose version is too old", func() {
+				var (
+					ss *httptest.Server
+				)
+				BeforeEach(func() {
+					ss = httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						w.Header().Set("Content-Type", "application/json")
+						handler(w, r)
+					}))
+					ss.TLS = &tls.Config{
+						MaxVersion: tls.VersionTLS11,
+					}
+					ss.StartTLS()
+				})
+				AfterEach(func() {
+					ss.Close()
+				})
+
+				It("returns an error getting token", func() {
+					service.TokenURL = ss.URL
+					service.TokenVerifyURL = service.TokenURL + "/v"
+					t, err := service.verifyToken("abc", VerificationOption{TargetScopes: []string{"scope"}, Action: "", Resource: "resource", Context: nil, NumRetry: &minusOne})
+					Expect(t).To(BeNil())
+					Expect(err).To(MatchError(AuthenticationError{
+						Message: fmt.Sprintf("Post \"%s\": remote error: tls: protocol version not supported", service.TokenURL),
+					}))
+				})
+
+				It("returns an error verifying token", func() {
+					service.TokenVerifyURL = ss.URL + "/v"
+					t, err := service.verifyToken("abc", VerificationOption{TargetScopes: []string{"scope"}, Action: "", Resource: "resource", Context: nil, NumRetry: &minusOne})
+					Expect(t).To(BeNil())
+					Expect(err).To(MatchError(AuthenticationError{
+						Message: fmt.Sprintf("Service failed to verify the token: Post \"%s\": remote error: tls: protocol version not supported", service.TokenVerifyURL),
+					}))
 				})
 			})
 		})

@@ -1,6 +1,7 @@
 package sand
 
 import (
+	"crypto/tls"
 	"errors"
 	"math"
 	"net/http"
@@ -32,9 +33,8 @@ type Client struct {
 	//TokenURL: The token endpoint of the OAuth2 server, e.g., "https://oauth.example.com/oauth2/token"
 	TokenURL string
 
-	//SkipTLSVerify skips checking the SSL certificate. Should be false for production.
-	//Default is false
-	SkipTLSVerify bool
+	//SSLMinVersion is the minimum supported TLS version. Default is TLS 1.2.
+	SSLMinVersion uint16
 
 	//DefaultRetryCount is the default number of retries to perform with exponential backoff when
 	//1. Clients receive 401 response from services
@@ -87,7 +87,7 @@ func NewClientWithCache(id, secret, tokenURL string, cache cache.Cache) (client 
 		ClientID:          id,
 		ClientSecret:      secret,
 		TokenURL:          tokenURL,
-		SkipTLSVerify:     false,
+		SSLMinVersion:     tls.VersionTLS12,
 		DefaultRetryCount: 5,
 		Cache:             cache,
 		CacheRoot:         "sand",
@@ -200,7 +200,7 @@ func (c *Client) OAuth2TokenWithoutCaching(scopes []string, numRetry int) (token
 	numRetry = c.tokenRequestRetryCount(numRetry)
 
 	transport := http.DefaultTransport.(*http.Transport).Clone()
-	transport.TLSClientConfig.InsecureSkipVerify = c.SkipTLSVerify
+	transport.TLSClientConfig.MinVersion = c.SSLMinVersion
 	client := &http.Client{Transport: transport}
 
 	ctx := context.TODO()
