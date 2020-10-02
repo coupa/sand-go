@@ -42,6 +42,7 @@ type Service struct {
 	Scopes []string
 }
 
+// VerificationOption ...
 type VerificationOption struct {
 	TargetScopes []string
 	Resource     string
@@ -90,7 +91,7 @@ func (s *Service) CheckRequestWithCustomRetry(r *http.Request, targetScopes []st
 	return s.VerifyRequest(r, VerificationOption{TargetScopes: targetScopes, Action: action, NumRetry: &numRetry})
 }
 
-//VerifyRequest
+//VerifyRequest ...
 //Remember to set a reasonable NumRetry value (>= 0) for the VerificationOption
 func (s *Service) VerifyRequest(r *http.Request, opt VerificationOption) (map[string]interface{}, error) {
 	token := ExtractToken(r.Header.Get("Authorization"))
