@@ -355,7 +355,7 @@ var _ = Describe("Service", func() {
 					t, err := service.verifyToken("abc", VerificationOption{TargetScopes: []string{"scope"}, Action: "", Resource: "resource", Context: nil, NumRetry: &minusOne})
 					Expect(t).To(BeNil())
 					Expect(err).To(MatchError(AuthenticationError{
-						Message: fmt.Sprintf("Post \"%s\": remote error: tls: protocol version not supported", service.TokenVerifyURL),
+						Message: fmt.Sprintf("Service failed to verify the token: Post \"%s\": remote error: tls: protocol version not supported", service.TokenVerifyURL),
 					}))
 				})
 			})

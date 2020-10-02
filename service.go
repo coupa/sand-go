@@ -95,12 +95,7 @@ func (s *Service) CheckRequestWithCustomRetry(r *http.Request, targetScopes []st
 //Remember to set a reasonable NumRetry value (>= 0) for the VerificationOption
 func (s *Service) VerifyRequest(r *http.Request, opt VerificationOption) (map[string]interface{}, error) {
 	token := ExtractToken(r.Header.Get("Authorization"))
-	rv, err := s.VerifyTokenWithCache(token, opt)
-	if err != nil {
-		log.Error(err)
-		err = AuthenticationError{"Service failed to verify the token: " + err.Error()}
-	}
-	return rv, err
+	return s.VerifyTokenWithCache(token, opt)
 }
 
 //ErrorCode gets the HTTP error code based on the error type. By default it is
@@ -199,7 +194,7 @@ func (s *Service) verifyToken(token string, opt VerificationOption) (map[string]
 	req.Header.Add("Authorization", "Bearer "+accessToken)
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, AuthenticationError{err.Error()}
+		return nil, AuthenticationError{"Service failed to verify the token: " + err.Error()}
 	}
 
 	defer resp.Body.Close()
