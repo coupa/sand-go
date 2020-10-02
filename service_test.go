@@ -130,6 +130,17 @@ var _ = Describe("Service", func() {
 		var ts *httptest.Server
 		var handler func(http.ResponseWriter, *http.Request)
 		BeforeEach(func() {
+			handler = func(w http.ResponseWriter, r *http.Request) {
+				var resp map[string]interface{}
+				if r.RequestURI == "/" {
+					resp = map[string]interface{}{"access_token": "def"}
+				} else if r.RequestURI == "/v" {
+					Expect(r.Header.Get("Authorization")).To(Equal("Bearer def"))
+					resp = map[string]interface{}{"allowed": true}
+				}
+				exp, _ := json.Marshal(resp)
+				fmt.Fprintf(w, string(exp))
+			}
 			ts = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
 				handler(w, r)
@@ -171,14 +182,6 @@ var _ = Describe("Service", func() {
 
 			Context("with service unable to verify an access token", func() {
 				It("returns an error of type sand.AuthenticationError", func() {
-					handler = func(w http.ResponseWriter, r *http.Request) {
-						var resp map[string]interface{}
-						if r.RequestURI == "/" {
-							resp = map[string]interface{}{"access_token": "def"}
-						}
-						exp, _ := json.Marshal(resp)
-						fmt.Fprintf(w, string(exp))
-					}
 					service.TokenVerifyURL = ""
 					r := http.Request{Header: http.Header{}}
 					r.Header.Set("Authorization", "Bearer abc")
@@ -259,17 +262,6 @@ var _ = Describe("Service", func() {
 
 			Context("with a valid token and valid response", func() {
 				It("returns allowed response", func() {
-					handler = func(w http.ResponseWriter, r *http.Request) {
-						var resp map[string]interface{}
-						if r.RequestURI == "/" {
-							resp = map[string]interface{}{"access_token": "def"}
-						} else if r.RequestURI == "/v" {
-							Expect(r.Header.Get("Authorization")).To(Equal("Bearer def"))
-							resp = map[string]interface{}{"allowed": true}
-						}
-						exp, _ := json.Marshal(resp)
-						fmt.Fprintf(w, string(exp))
-					}
 					t, err := service.verifyToken("abc", VerificationOption{TargetScopes: []string{"scope"}, Action: "", Resource: "resource", Context: nil, NumRetry: &minusOne})
 					Expect(err).To(BeNil())
 					Expect(t).To(Equal(map[string]interface{}{"allowed": true}))
@@ -317,17 +309,6 @@ var _ = Describe("Service", func() {
 				It("returns an error getting token", func() {
 					service.TokenURL = "http://sand.test"
 					service.TokenVerifyURL = service.TokenURL + "/v"
-					handler = func(w http.ResponseWriter, r *http.Request) {
-						var resp map[string]interface{}
-						if r.RequestURI == "/" {
-							resp = map[string]interface{}{"access_token": "def"}
-						} else if r.RequestURI == "/v" {
-							Expect(r.Header.Get("Authorization")).To(Equal("Bearer def"))
-							resp = map[string]interface{}{"allowed": true}
-						}
-						exp, _ := json.Marshal(resp)
-						fmt.Fprintf(w, string(exp))
-					}
 					t, err := service.verifyToken("abc", VerificationOption{TargetScopes: []string{"scope"}, Action: "", Resource: "resource", Context: nil, NumRetry: &minusOne})
 					Expect(t).To(BeNil())
 					Expect(err).To(MatchError(AuthenticationError{Message: "oauth2: cannot fetch token: 403 Forbidden\nResponse: "}))
@@ -335,17 +316,6 @@ var _ = Describe("Service", func() {
 
 				It("returns an error verifying token", func() {
 					service.TokenVerifyURL = "http://sand.test/v"
-					handler = func(w http.ResponseWriter, r *http.Request) {
-						var resp map[string]interface{}
-						if r.RequestURI == "/" {
-							resp = map[string]interface{}{"access_token": "def"}
-						} else if r.RequestURI == "/v" {
-							Expect(r.Header.Get("Authorization")).To(Equal("Bearer def"))
-							resp = map[string]interface{}{"allowed": true}
-						}
-						exp, _ := json.Marshal(resp)
-						fmt.Fprintf(w, string(exp))
-					}
 					t, err := service.verifyToken("abc", VerificationOption{TargetScopes: []string{"scope"}, Action: "", Resource: "resource", Context: nil, NumRetry: &minusOne})
 					Expect(t).To(BeNil())
 					Expect(err).To(MatchError(AuthenticationError{Message: "Error response from the authentication service: 403 - "}))
@@ -373,17 +343,6 @@ var _ = Describe("Service", func() {
 				It("returns an error getting token", func() {
 					service.TokenURL = ss.URL
 					service.TokenVerifyURL = service.TokenURL + "/v"
-					handler = func(w http.ResponseWriter, r *http.Request) {
-						var resp map[string]interface{}
-						if r.RequestURI == "/" {
-							resp = map[string]interface{}{"access_token": "def"}
-						} else if r.RequestURI == "/v" {
-							Expect(r.Header.Get("Authorization")).To(Equal("Bearer def"))
-							resp = map[string]interface{}{"allowed": true}
-						}
-						exp, _ := json.Marshal(resp)
-						fmt.Fprintf(w, string(exp))
-					}
 					t, err := service.verifyToken("abc", VerificationOption{TargetScopes: []string{"scope"}, Action: "", Resource: "resource", Context: nil, NumRetry: &minusOne})
 					Expect(t).To(BeNil())
 					Expect(err).To(MatchError(AuthenticationError{
@@ -393,17 +352,6 @@ var _ = Describe("Service", func() {
 
 				It("returns an error verifying token", func() {
 					service.TokenVerifyURL = ss.URL + "/v"
-					handler = func(w http.ResponseWriter, r *http.Request) {
-						var resp map[string]interface{}
-						if r.RequestURI == "/" {
-							resp = map[string]interface{}{"access_token": "def"}
-						} else if r.RequestURI == "/v" {
-							Expect(r.Header.Get("Authorization")).To(Equal("Bearer def"))
-							resp = map[string]interface{}{"allowed": true}
-						}
-						exp, _ := json.Marshal(resp)
-						fmt.Fprintf(w, string(exp))
-					}
 					t, err := service.verifyToken("abc", VerificationOption{TargetScopes: []string{"scope"}, Action: "", Resource: "resource", Context: nil, NumRetry: &minusOne})
 					Expect(t).To(BeNil())
 					Expect(err).To(MatchError(AuthenticationError{
