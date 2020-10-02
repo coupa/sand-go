@@ -199,7 +199,7 @@ func (s *Service) verifyToken(token string, opt VerificationOption) (map[string]
 	req.Header.Add("Authorization", "Bearer "+accessToken)
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, AuthenticationError{err.Error()}
 	}
 
 	defer resp.Body.Close()
