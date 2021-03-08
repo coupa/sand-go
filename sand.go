@@ -175,6 +175,7 @@ func (c *Client) OAuth2Token(cacheKey string, scopes []string, numRetry int) (*o
 			if tk, ok := value.(oauth2.Token); ok {
 				return &tk, nil
 			}
+			log.Warnf("Unable to cast token type from cache. Proceed with getting a new token")
 		}
 	}
 	token, err := c.OAuth2TokenWithoutCaching(scopes, numRetry)

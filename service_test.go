@@ -368,6 +368,24 @@ var _ = Describe("Service", func() {
 				futureTime := time.Now().Add(time.Duration(100) * time.Second)
 				t := futureTime.Format("2006-01-02T15:04:05.00-07:00")
 				Expect(service.expiryTime(t)).To(BeNumerically("<=", 100))
+
+				t = futureTime.UTC().Format("2006-01-02T15:04:05.000Z")
+				Expect(service.expiryTime(t)).To(BeNumerically("<=", 100))
+
+				t = futureTime.UTC().Format("2006-01-02T15:04:05.000000Z")
+				Expect(service.expiryTime(t)).To(BeNumerically("<=", 100))
+
+				t = futureTime.UTC().Format("2006-01-02T15:04:05.00000000Z")
+				Expect(service.expiryTime(t)).To(BeNumerically("<=", 100))
+
+				t = futureTime.UTC().Format("2006-01-02T15:04:05.000000000Z")
+				Expect(service.expiryTime(t)).To(BeNumerically("<=", 100))
+
+				t = futureTime.Format("2006-01-02T15:04:05.000000000Z07:00")
+				Expect(service.expiryTime(t)).To(BeNumerically("<=", 100))
+
+				t = futureTime.Format("2006-01-02T15:04:05.000000Z07:00")
+				Expect(service.expiryTime(t)).To(BeNumerically("<=", 100))
 			})
 		})
 

@@ -9,3 +9,12 @@ type AuthenticationError struct {
 func (e AuthenticationError) Error() string {
 	return e.Message
 }
+
+//ServiceUnauthorizedError when service receives 401 from Sand while verifying a client token.
+type ServiceUnauthorizedError struct {
+	Message string `json:"message"`
+}
+
+func (e ServiceUnauthorizedError) Error() string {
+	return e.Message
+}

@@ -13,7 +13,8 @@ import (
 )
 
 const (
-	iso8601 = "2006-01-02T15:04:05.00-07:00"
+	iso8601         = "2006-01-02T15:04:05.999999999Z07:00"
+	serviceCacheKey = "service-access-token"
 )
 
 var notAllowedResponse = map[string]interface{}{
@@ -65,7 +66,7 @@ func NewService(id, secret, tokenURL, resource, verifyURL string, scopes []strin
 		Context:        map[string]interface{}{},
 		TokenVerifyURL: verifyURL,
 		Scopes:         scopes,
-		DefaultExpTime: 3600,
+		DefaultExpTime: 3599,
 	}
 	return
 }
@@ -132,9 +133,24 @@ func (s *Service) VerifyTokenWithCache(token string, opt VerificationOption) (ma
 		}
 	}
 	resp, err := s.verifyToken(token, opt)
-	if err != nil || resp == nil {
+	if err != nil {
+		switch err.(type) {
+		case ServiceUnauthorizedError:
+			//Delete the service token from cache and try once again
+			if s.Cache != nil {
+				s.Cache.Delete(s.cacheKey(serviceCacheKey, s.Scopes, ""))
+			}
+			if resp, err = s.verifyToken(token, opt); err != nil {
+				return notAllowedResponse, err
+			}
+		default:
+			return notAllowedResponse, err
+		}
+	}
+	if resp == nil {
 		return notAllowedResponse, err
 	}
+
 	if s.Cache != nil {
 		//Write to cache
 		if resp["allowed"] == true {
@@ -177,7 +193,7 @@ func (s *Service) verifyToken(token string, opt VerificationOption) (map[string]
 	if token == "" || opt.Resource == "" {
 		return nil, nil
 	}
-	accessToken, err := s.Token("service-access-token", s.Scopes, *opt.NumRetry)
+	accessToken, err := s.Token(serviceCacheKey, s.Scopes, *opt.NumRetry)
 	if err != nil {
 		return nil, err
 	}
@@ -204,13 +220,15 @@ func (s *Service) verifyToken(token string, opt VerificationOption) (map[string]
 	defer resp.Body.Close()
 	body, _ := ioutil.ReadAll(resp.Body)
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		str := fmt.Sprintf("Error response from the authentication service: %d - %s", resp.StatusCode, body)
-		if resp.StatusCode == 500 {
+		if resp.StatusCode == http.StatusInternalServerError {
 			//When the response is 500, the token may be expired. So let the client retry
 			//and return 401 by returning nil, so that the result is not cached.
 			log.Error(str)
 			return nil, nil
+		} else if resp.StatusCode == http.StatusUnauthorized {
+			return nil, ServiceUnauthorizedError{Message: "Service unauthorized to access token verification endpoint"}
 		}
 		return nil, AuthenticationError{Message: str}
 	}
